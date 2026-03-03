@@ -8,7 +8,7 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, browserLocalPersistence, setPersistence }
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, browserLocalPersistence, setPersistence, signInAnonymously }
     from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
   import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, setDoc,
     doc, getDoc, query, orderBy, serverTimestamp, writeBatch, getDocs }
@@ -17,8 +17,8 @@
   // Configuration uses app specific domain. Fix for (auth/unauthorized-domain).
   const firebaseConfig = {
     apiKey:            "AIzaSyBFWZcPwH8D5rr5UJcUMOTQEZ6mzptkkFY",
-    // Use window.location.hostname to automatically handle current domain, circumventing auth/unauthorized-domain issues.
-    authDomain:        window.location.hostname === "localhost" ? "snow-age-calculator.firebaseapp.com" : window.location.hostname,
+    // 復原為預設的 authDomain。動態抓取 hostname 無法解決 Firebase 後端白名單的問題。
+    authDomain:        "snow-age-calculator.firebaseapp.com",
     projectId:         "snow-age-calculator",
     storageBucket:     "snow-age-calculator.firebasestorage.app",
     messagingSenderId: "123456789",
@@ -56,9 +56,17 @@
           await signInWithPopup(auth, provider);
         } catch(err) {
             console.error('Login error:', err);
-            // Provide a more user-friendly error message for common issues.
+            
+            // 如果遇到網域未授權，嘗試使用匿名登入作為測試備案
             if(err.code === 'auth/unauthorized-domain') {
-                 alert('登入失敗: 此網域尚未獲得授權，請聯絡管理員設定。');
+                 console.log("網域未授權，嘗試使用匿名登入作為備用方案...");
+                 try {
+                     await signInAnonymously(auth);
+                     alert('Google 登入受限於網域。已暫時使用「匿名帳號」登入供您測試功能。');
+                 } catch (anonErr) {
+                     console.error("匿名登入也失敗:", anonErr);
+                     alert('登入失敗: 此網域尚未獲得授權，且匿名登入無法使用。請確認 Firebase Console 設定。');
+                 }
             } else {
                  alert('登入失敗: ' + err.message);
             }
