@@ -755,21 +755,16 @@ function dpRenderYear(ctx, panel) {
   const base = s.yrBase, curY = todayObj().y;
   let grid = '';
   for (let y = base; y < base + 16; y++) {
-    grid += `<div class="dp-yrcell${y===s.y?' ysel':''}${y===curY&&y!==s.y?' ycur':''}"
-      onclick="dpPickYear('${ctx}',${y})">${y}</div>`;
+    grid += `<div class="dp-yrcell${y===s.y?' ysel':''}${y===curY&&y!==s.y?' ycur':''}" data-y="${y}">${y}</div>`;
   }
   panel.innerHTML = `
     <div class="dp-nav" style="padding-bottom:6px">
-      <button class="dp-arr" onclick="dpYrPage('${ctx}',-1)">‹</button>
+      <button class="dp-arr" data-act="yrprev">‹</button>
       <span style="font-size:.8rem;color:var(--muted)">${base}–${base+15}</span>
-      <button class="dp-arr" onclick="dpYrPage('${ctx}',1)">›</button>
+      <button class="dp-arr" data-act="yrnext">›</button>
     </div>
     <div style="padding:0 12px 14px"><div class="dp-yrgrid">${grid}</div></div>`;
 }
-
-function dpPickYear(ctx, y) { DP[ctx].y = y; DP[ctx].showYr = false; dpRender(ctx); }
-function dpYrPage(ctx, dir) { DP[ctx].yrBase += dir * 16; dpRender(ctx); }
-function dpOpenYear(ctx) { const s = DP[ctx]; s.showYr = true; s.yrBase = Math.floor(s.y / 16) * 16; dpRender(ctx); }
 
 function dpRenderCal(ctx, panel) {
   const s = DP[ctx];
@@ -782,9 +777,7 @@ function dpRenderCal(ctx, panel) {
   for (let i = 0; i < firstDay; i++) cells += '<div class="dp-d emp"></div>';
   for (let d = 1; d <= dim; d++) {
     const ds = d2s(y, m, d);
-    cells += `<div class="${dpDayCls(ds, s, today, y, m, d)}"
-      onclick="dpClickDay('${ctx}','${ds}')"
-      onmouseenter="dpHover('${ctx}','${ds}')">${d}</div>`;
+    cells += `<div class="${dpDayCls(ds, s, today, y, m, d)}" data-ds="${ds}">${d}</div>`;
   }
 
   let info = '';
@@ -795,12 +788,12 @@ function dpRenderCal(ctx, panel) {
 
   panel.innerHTML = `
     <div class="dp-nav">
-      <button class="dp-arr" onclick="dpShiftM('${ctx}',-1)">‹</button>
+      <button class="dp-arr" data-act="prev">‹</button>
       <div class="dp-nav-mid">
-        <span class="dp-yr" onclick="dpOpenYear('${ctx}')">${y}</span>
+        <span class="dp-yr" data-act="openyr">${y}</span>
         <span class="dp-mo">${MONTHS[m]}</span>
       </div>
-      <button class="dp-arr" onclick="dpShiftM('${ctx}',1)">›</button>
+      <button class="dp-arr" data-act="next">›</button>
     </div>
     <div class="dp-cal">
       <div class="dp-wdays">${WDAYS.map(w=>`<div class="dp-wd">${w}</div>`).join('')}</div>
@@ -808,10 +801,41 @@ function dpRenderCal(ctx, panel) {
     </div>
     <div class="dp-foot">
       <div class="dp-finfo">${info}</div>
-      <button class="dp-clr" onclick="dpClear('${ctx}')">清除</button>
-      <button class="dp-ok" onclick="dpConfirm('${ctx}')">確定</button>
+      <button class="dp-clr" data-act="clear">清除</button>
+      <button class="dp-ok" data-act="ok">確定</button>
     </div>`;
 }
+
+// 事件委派：所有面板互動統一在這裡處理
+document.addEventListener('click', e => {
+  const panel = e.target.closest('.dp-panel');
+  if (!panel) return;
+  const ctx = panel.id.replace('DatePanel', '');
+  const s = DP[ctx];
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  const ds  = e.target.closest('[data-ds]')?.dataset.ds;
+  const yr  = e.target.closest('[data-y]')?.dataset.y;
+
+  if (act === 'prev')   { dpShiftM(ctx, -1); return; }
+  if (act === 'next')   { dpShiftM(ctx,  1); return; }
+  if (act === 'openyr') { s.showYr = true; s.yrBase = Math.floor(s.y/16)*16; dpRender(ctx); return; }
+  if (act === 'yrprev') { s.yrBase -= 16; dpRender(ctx); return; }
+  if (act === 'yrnext') { s.yrBase += 16; dpRender(ctx); return; }
+  if (act === 'clear')  { dpClear(ctx); return; }
+  if (act === 'ok')     { dpConfirm(ctx); return; }
+  if (yr)  { s.y = +yr; s.showYr = false; dpRender(ctx); return; }
+  if (ds)  { dpClickDay(ctx, ds); return; }
+});
+
+// hover 預覽範圍（mouseover 委派）
+document.addEventListener('mouseover', e => {
+  const dayEl = e.target.closest('[data-ds]');
+  if (!dayEl) return;
+  const panel = dayEl.closest('.dp-panel');
+  if (!panel) return;
+  const ctx = panel.id.replace('DatePanel', '');
+  dpHover(ctx, dayEl.dataset.ds);
+});
 
 // 共用：根據狀態計算日格 class
 function dpDayCls(ds, s, today, y, m, d) {
@@ -875,9 +899,7 @@ function dpHover(ctx, ds) {
     else if (dd===lo)             cls += ' ds ir';
     else if (dd===hi)             cls += ' ir de';
     else if (dd>lo && dd<hi)     cls += ' ir';
-    cells += `<div class="${cls}"
-      onclick="dpClickDay('${ctx}','${dd}')"
-      onmouseenter="dpHover('${ctx}','${dd}')">${d}</div>`;
+    cells += `<div class="${cls}" data-ds="${dd}">${d}</div>`;
   }
   daysEl.innerHTML = cells;
 }
