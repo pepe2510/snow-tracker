@@ -2,19 +2,17 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>雪齡計算器</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-  import {
-    getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
-  } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-  import {
-    getFirestore, collection, onSnapshot,
-    addDoc, deleteDoc, doc, query, orderBy, serverTimestamp, writeBatch, getDocs
-  } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+  import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc,
+    doc, query, orderBy, serverTimestamp, writeBatch, getDocs }
+    from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey:            "AIzaSyBFWZcPwH8D5rr5UJcUMOTQEZ6mzptkkFY",
@@ -24,349 +22,213 @@
     messagingSenderId: "527060791092",
     appId:             "1:527060791092:web:0e96e161c944016030ff61"
   };
+  const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getFirestore(app), COL='ski-entries';
+  let unsubscribe=null;
 
-  const app  = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db   = getFirestore(app);
-  const COL  = 'ski-entries';
-
-  let unsubscribe = null;
-
-  // ── Auth state ────────────────────────────────────────
   onAuthStateChanged(auth, user => {
     if (user) {
-      // 登入成功
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('mainApp').style.display = 'block';
-      document.getElementById('userEmail').textContent = user.email;
-      document.getElementById('userAvatar').src = user.photoURL || '';
-      document.getElementById('userAvatar').style.display = user.photoURL ? 'block' : 'none';
+      document.getElementById('loginScreen').style.display='none';
+      document.getElementById('mainApp').style.display='block';
+      document.getElementById('userEmail').textContent=user.email;
+      const av=document.getElementById('userAvatar');
+      av.src=user.photoURL||''; av.style.display=user.photoURL?'block':'none';
       startListening(user.uid);
     } else {
-      // 未登入
-      document.getElementById('loginScreen').style.display = 'flex';
-      document.getElementById('mainApp').style.display = 'none';
-      if (unsubscribe) { unsubscribe(); unsubscribe = null; }
-      window.entries = [];
-      hideLoading();
+      document.getElementById('loginScreen').style.display='flex';
+      document.getElementById('mainApp').style.display='none';
+      if(unsubscribe){unsubscribe();unsubscribe=null;}
+      window.entries=[]; hideLoading();
     }
   });
-
-  // ── Firestore listener (per user) ────────────────────
-  function startListening(uid) {
-    if (unsubscribe) unsubscribe();
-    const q = query(
-      collection(db, 'users', uid, COL),
-      orderBy('createdAt', 'asc')
-    );
-    unsubscribe = onSnapshot(q,
-      snap => {
-        window.entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        render();
-        setSyncStatus('synced', '已同步 · Firebase 即時同步');
-        hideLoading();
-      },
-      err => {
-        setSyncStatus('error', '連線失敗：' + err.message);
-        hideLoading();
-      }
+  function startListening(uid){
+    if(unsubscribe)unsubscribe();
+    unsubscribe=onSnapshot(query(collection(db,'users',uid,COL),orderBy('createdAt','asc')),
+      snap=>{ window.entries=snap.docs.map(d=>({id:d.id,...d.data()})); render(); updateFilterOptions(); setSyncStatus('synced','已同步'); hideLoading(); },
+      err=>{ setSyncStatus('error','連線失敗'); hideLoading(); }
     );
   }
-
-  // ── Expose Firebase actions ───────────────────────────
-  window._fbSignIn = async () => {
-    try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
-    } catch(e) {
-      showToast('⚠ 登入失敗：' + e.message);
-    }
-  };
-
-  window._fbSignOut = async () => {
-    if (!confirm('確定要登出？')) return;
-    await signOut(auth);
-  };
-
-  window._fbAdd = async (entry) => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) throw new Error('未登入');
-    const { id, ...data } = entry;
-    await addDoc(collection(db, 'users', uid, COL), { ...data, createdAt: serverTimestamp() });
-  };
-
-  window._fbDelete = async (id) => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) throw new Error('未登入');
-    await deleteDoc(doc(db, 'users', uid, COL, id));
-  };
-
-  window._fbClearAll = async () => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) throw new Error('未登入');
-    const snap = await getDocs(collection(db, 'users', uid, COL));
-    const batch = writeBatch(db);
-    snap.forEach(d => batch.delete(d.ref));
-    await batch.commit();
-  };
+  window._fbSignIn=async()=>{ try{await signInWithPopup(auth,new GoogleAuthProvider());}catch(e){showToast('登入失敗：'+e.message);} };
+  window._fbSignOut=async()=>{ if(!confirm('確定要登出？'))return; await signOut(auth); };
+  window._fbAdd=async(entry)=>{ const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入'); const{id,...data}=entry; await addDoc(collection(db,'users',uid,COL),{...data,createdAt:serverTimestamp()}); };
+  window._fbUpdate=async(id,data)=>{ const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入'); await updateDoc(doc(db,'users',uid,COL,id),data); };
+  window._fbDelete=async(id)=>{ const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入'); await deleteDoc(doc(db,'users',uid,COL,id)); };
+  window._fbClearAll=async()=>{ const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入'); const snap=await getDocs(collection(db,'users',uid,COL)); const batch=writeBatch(db); snap.forEach(d=>batch.delete(d.ref)); await batch.commit(); };
 </script>
 
 <style>
-  :root {
-    --bg: #0a0e1a;
-    --surface: #111827;
-    --card: #1a2235;
-    --border: #2a3a55;
-    --accent: #7dd3fc;
-    --accent2: #38bdf8;
-    --snow: #e0f2fe;
-    --text: #cbd5e1;
-    --muted: #64748b;
-    --danger: #f87171;
-    --success: #4ade80;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg); color: var(--text);
-    font-family: 'Noto Serif TC', serif;
-    min-height: 100vh; overflow-x: hidden;
-  }
+:root{
+  --bg:#0a0e1a; --surface:#111827; --card:#1a2235; --border:#2a3a55;
+  --accent:#7dd3fc; --accent2:#38bdf8; --snow:#e0f2fe; --text:#cbd5e1;
+  --muted:#64748b; --danger:#f87171; --success:#4ade80;
+  --tap:48px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{-webkit-text-size-adjust:100%;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Serif TC',serif;min-height:100vh;overflow-x:hidden;}
 
-  /* Snow */
-  .snow-bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
-  .flake {
-    position: absolute; top: -20px;
-    color: rgba(224,242,254,0.3); font-size: 1rem;
-    animation: fall linear infinite; user-select: none;
-  }
-  @keyframes fall { to { transform: translateY(110vh) rotate(360deg); } }
+/* Snow */
+.snow-bg{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+.flake{position:absolute;top:-20px;color:rgba(224,242,254,0.25);font-size:1rem;animation:fall linear infinite;user-select:none;}
+@keyframes fall{to{transform:translateY(110vh) rotate(360deg);}}
 
-  /* Loading */
-  .loading-overlay {
-    position: fixed; inset: 0; z-index: 999; background: var(--bg);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 16px; transition: opacity 0.5s;
-  }
-  .loading-overlay.hidden { opacity: 0; pointer-events: none; }
-  .loading-logo { font-family: 'Bebas Neue', sans-serif; font-size: 3rem; color: var(--snow); letter-spacing: 0.1em; }
-  .loading-spinner {
-    width: 32px; height: 32px;
-    border: 3px solid var(--border); border-top-color: var(--accent2);
-    border-radius: 50%; animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.1em; }
+/* Loading */
+.loading-overlay{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity 0.5s;}
+.loading-overlay.hidden{opacity:0;pointer-events:none;}
+.loading-logo{font-family:'Bebas Neue',sans-serif;font-size:3rem;color:var(--snow);letter-spacing:0.1em;}
+.loading-spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent2);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-size:0.85rem;color:var(--muted);}
 
-  /* Toast */
-  .toast {
-    position: fixed; bottom: 28px; left: 50%;
-    transform: translateX(-50%) translateY(80px);
-    background: #1e3a5f; border: 1px solid var(--accent);
-    border-radius: 10px; padding: 10px 22px;
-    font-size: 0.85rem; color: var(--snow);
-    transition: transform 0.3s ease; z-index: 200; white-space: nowrap;
-  }
-  .toast.show { transform: translateX(-50%) translateY(0); }
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:#1e3a5f;border:1px solid var(--accent);border-radius:12px;padding:12px 24px;font-size:0.9rem;color:var(--snow);transition:transform 0.3s ease;z-index:600;white-space:nowrap;max-width:90vw;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);}
 
-  /* ── Login screen ── */
-  #loginScreen {
-    display: none;
-    position: fixed; inset: 0; z-index: 10;
-    flex-direction: column; align-items: center; justify-content: center; gap: 32px;
-    background: var(--bg);
-  }
-  .login-logo {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(3.5rem, 12vw, 7rem);
-    color: var(--snow); letter-spacing: 0.08em; line-height: 1;
-    text-shadow: 0 0 60px rgba(125,211,252,0.5), 0 0 120px rgba(56,189,248,0.2);
-  }
-  .login-subtitle { color: var(--muted); font-size: 0.9rem; letter-spacing: 0.15em; margin-top: -20px; }
-  .login-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 20px; padding: 36px 40px;
-    text-align: center; max-width: 360px; width: 90%;
-  }
-  .login-card h2 { font-size: 1rem; color: var(--snow); margin-bottom: 8px; }
-  .login-card p { font-size: 0.82rem; color: var(--muted); margin-bottom: 24px; line-height: 1.6; }
-  .btn-google {
-    display: flex; align-items: center; justify-content: center; gap: 12px;
-    width: 100%; padding: 13px 20px;
-    background: #fff; border: none; border-radius: 10px;
-    font-family: 'Noto Serif TC', serif; font-size: 0.95rem; color: #1f2937;
-    cursor: pointer; font-weight: 700;
-    transition: opacity 0.2s, transform 0.1s;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-  }
-  .btn-google:hover { opacity: 0.92; }
-  .btn-google:active { transform: scale(0.98); }
-  .btn-google svg { flex-shrink: 0; }
+/* Login */
+#loginScreen{display:none;position:fixed;inset:0;z-index:10;flex-direction:column;align-items:center;justify-content:center;gap:28px;background:var(--bg);padding:20px;}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.5rem,15vw,7rem);color:var(--snow);letter-spacing:0.08em;line-height:1;text-shadow:0 0 60px rgba(125,211,252,0.5);}
+.login-subtitle{color:var(--muted);font-size:0.9rem;letter-spacing:0.15em;margin-top:-16px;}
+.login-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:32px 28px;text-align:center;width:100%;max-width:360px;}
+.login-card h2{font-size:1.05rem;color:var(--snow);margin-bottom:8px;}
+.login-card p{font-size:0.85rem;color:var(--muted);margin-bottom:24px;line-height:1.7;}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:15px 20px;background:#fff;border:none;border-radius:12px;font-family:'Noto Serif TC',serif;font-size:1rem;color:#1f2937;cursor:pointer;font-weight:700;box-shadow:0 2px 16px rgba(0,0,0,0.3);-webkit-tap-highlight-color:transparent;}
+.btn-google:active{transform:scale(0.97);}
 
-  /* ── Main app ── */
-  #mainApp { display: none; }
-  .container { position: relative; z-index: 1; max-width: 780px; margin: 0 auto; padding: 40px 20px 80px; }
-  header { text-align: center; margin-bottom: 40px; }
-  .logo {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(3rem, 10vw, 6rem);
-    letter-spacing: 0.08em; color: var(--snow); line-height: 1;
-    text-shadow: 0 0 60px rgba(125,211,252,0.4), 0 0 120px rgba(56,189,248,0.2);
-  }
-  .subtitle { margin-top: 8px; color: var(--muted); font-size: 0.9rem; letter-spacing: 0.15em; }
+/* Main */
+#mainApp{display:none;}
+.container{position:relative;z-index:1;max-width:600px;margin:0 auto;padding:28px 16px 100px;}
 
-  /* User bar */
-  .user-bar {
-    display: flex; align-items: center; justify-content: center;
-    gap: 10px; margin-bottom: 10px; font-size: 0.8rem; color: var(--muted);
-  }
-  .user-avatar {
-    width: 24px; height: 24px; border-radius: 50%;
-    border: 1px solid var(--border); object-fit: cover;
-  }
-  .btn-signout {
-    background: none; border: 1px solid var(--border); border-radius: 6px;
-    color: var(--muted); font-size: 0.72rem; padding: 2px 10px;
-    cursor: pointer; font-family: 'Noto Serif TC', serif;
-    transition: border-color 0.2s, color 0.2s;
-  }
-  .btn-signout:hover { border-color: var(--danger); color: var(--danger); }
+header{text-align:center;margin-bottom:28px;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.8rem,12vw,5rem);letter-spacing:0.08em;color:var(--snow);line-height:1;text-shadow:0 0 50px rgba(125,211,252,0.4);}
+.subtitle{margin-top:6px;color:var(--muted);font-size:0.82rem;letter-spacing:0.12em;}
 
-  /* Sync bar */
-  .sync-bar {
-    display: flex; align-items: center; justify-content: center;
-    gap: 8px; margin-bottom: 24px; font-size: 0.78rem; color: var(--muted); letter-spacing: 0.08em;
-  }
-  .sync-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--muted); transition: background 0.4s;
-  }
-  .sync-dot.synced  { background: var(--success); box-shadow: 0 0 8px rgba(74,222,128,0.6); }
-  .sync-dot.syncing { background: var(--accent2); animation: pulse 1s infinite; }
-  .sync-dot.error   { background: var(--danger); }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+/* User bar */
+.user-bar{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;font-size:0.78rem;color:var(--muted);}
+.user-avatar{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);object-fit:cover;}
+.btn-signout{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:0.72rem;padding:3px 10px;cursor:pointer;font-family:'Noto Serif TC',serif;min-height:28px;}
 
-  /* Total banner */
-  .total-banner {
-    background: linear-gradient(135deg, #0c4a6e, #1e3a5f);
-    border: 1px solid var(--accent); border-radius: 16px;
-    padding: 24px 32px; margin-bottom: 32px;
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 16px; box-shadow: 0 0 40px rgba(56,189,248,0.1);
-  }
-  .total-label { font-size: 1rem; color: var(--accent); letter-spacing: 0.1em; }
-  .total-days {
-    font-family: 'Bebas Neue', sans-serif; font-size: 3.5rem;
-    color: var(--snow); line-height: 1; text-shadow: 0 0 30px rgba(125,211,252,0.6);
-  }
-  .total-unit { font-size: 1rem; color: var(--muted); margin-top: 4px; }
-  .total-right { text-align: right; }
-  .ski-age-badge {
-    background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3);
-    border-radius: 10px; padding: 8px 16px; font-size: 0.85rem; color: var(--accent); text-align: center;
-  }
+/* Sync */
+.sync-bar{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:20px;font-size:0.75rem;color:var(--muted);}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background 0.4s;flex-shrink:0;}
+.sync-dot.synced{background:var(--success);box-shadow:0 0 6px rgba(74,222,128,0.6);}
+.sync-dot.syncing{background:var(--accent2);animation:pulse 1s infinite;}
+.sync-dot.error{background:var(--danger);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
 
-  /* Form */
-  .form-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 16px; padding: 28px; margin-bottom: 24px;
-  }
-  .form-title { font-size: 0.8rem; letter-spacing: 0.2em; color: var(--muted); margin-bottom: 20px; text-transform: uppercase; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .field { display: flex; flex-direction: column; gap: 6px; }
-  .field.full { grid-column: 1 / -1; }
-  label { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.12em; }
-  input {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text); padding: 10px 14px;
-    font-family: 'Noto Serif TC', serif; font-size: 0.9rem;
-    transition: border-color 0.2s, box-shadow 0.2s; outline: none; width: 100%;
-  }
-  input:focus { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(56,189,248,0.12); }
-  .btn-add {
-    width: 100%; margin-top: 16px;
-    background: linear-gradient(135deg, #0369a1, #0284c7);
-    border: none; border-radius: 10px; color: #fff;
-    font-family: 'Noto Serif TC', serif; font-size: 1rem;
-    padding: 12px; cursor: pointer; letter-spacing: 0.1em;
-    transition: opacity 0.2s, transform 0.1s;
-  }
-  .btn-add:hover { opacity: 0.9; }
-  .btn-add:active { transform: scale(0.98); }
-  .btn-add:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Total banner */
+.total-banner{background:linear-gradient(135deg,#0c4a6e,#1e3a5f);border:1px solid var(--accent);border-radius:16px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 0 32px rgba(56,189,248,0.1);}
+.total-label{font-size:0.85rem;color:var(--accent);letter-spacing:0.08em;}
+.total-days{font-family:'Bebas Neue',sans-serif;font-size:3.2rem;color:var(--snow);line-height:1;text-shadow:0 0 24px rgba(125,211,252,0.6);}
+.total-unit{font-size:0.9rem;color:var(--muted);margin-top:2px;}
+.total-right{text-align:right;}
+.ski-age-badge{background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius:10px;padding:7px 14px;font-size:0.82rem;color:var(--accent);white-space:nowrap;}
 
-  /* Entries */
-  .entries-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .entries-label { font-size: 0.8rem; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; }
-  .entries-controls { display: flex; gap: 8px; align-items: center; }
-  .btn-sort {
-    background: none; border: 1px solid var(--border); border-radius: 6px;
-    color: var(--accent); font-size: 0.75rem; padding: 4px 12px; cursor: pointer;
-    font-family: 'Noto Serif TC', serif; transition: background 0.2s, border-color 0.2s;
-    display: flex; align-items: center; gap: 5px; white-space: nowrap;
-  }
-  .btn-sort:hover { background: rgba(125,211,252,0.08); border-color: var(--accent); }
-  .sort-arrow { font-size: 0.85rem; transition: transform 0.3s; display: inline-block; }
-  .sort-arrow.asc { transform: rotate(180deg); }
-  .btn-clear {
-    background: none; border: 1px solid rgba(248,113,113,0.3); border-radius: 6px;
-    color: var(--danger); font-size: 0.75rem; padding: 4px 12px; cursor: pointer;
-    font-family: 'Noto Serif TC', serif; transition: background 0.2s;
-  }
-  .btn-clear:hover { background: rgba(248,113,113,0.1); }
-  .entries-list { display: flex; flex-direction: column; gap: 10px; }
-  .entry-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 16px 20px;
-    display: flex; align-items: center; gap: 16px; animation: slideIn 0.3s ease;
-  }
-  @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
-  .entry-num { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; color: var(--accent); min-width: 36px; text-align: center; line-height: 1; }
-  .entry-info { flex: 1; }
-  .entry-resort { font-size: 1rem; color: var(--snow); margin-bottom: 3px; }
-  .entry-meta { font-size: 0.78rem; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
-  .entry-days { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; color: var(--accent2); line-height: 1; text-align: right; white-space: nowrap; }
-  .entry-days-label { font-size: 0.72rem; color: var(--muted); text-align: right; }
-  .btn-delete {
-    background: none; border: none; color: var(--muted); cursor: pointer;
-    font-size: 1.1rem; padding: 4px; border-radius: 6px; line-height: 1;
-    transition: color 0.2s, background 0.2s;
-  }
-  .btn-delete:hover { color: var(--danger); background: rgba(248,113,113,0.1); }
-  .empty-state {
-    text-align: center; padding: 40px; color: var(--muted); font-size: 0.9rem;
-    letter-spacing: 0.05em; border: 1px dashed var(--border); border-radius: 12px;
-  }
-  .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+/* Form card */
+.form-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;}
+.section-title{font-size:0.72rem;letter-spacing:0.2em;color:var(--muted);margin-bottom:16px;text-transform:uppercase;}
+.form-col{display:flex;flex-direction:column;gap:12px;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+label{font-size:0.72rem;color:var(--muted);letter-spacing:0.1em;}
 
-  @media (max-width: 480px) {
-    .form-grid { grid-template-columns: 1fr; }
-    .field.full { grid-column: 1; }
-    .total-banner { flex-direction: column; align-items: flex-start; }
-    .login-card { padding: 28px 24px; }
-  }
+input{background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font-family:'Noto Serif TC',serif;font-size:1rem;outline:none;width:100%;min-height:var(--tap);-webkit-appearance:none;}
+input:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(56,189,248,0.12);}
+input[readonly]{opacity:0.7;cursor:default;}
+
+/* Resort autocomplete */
+.resort-wrap{position:relative;}
+.autocomplete-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--accent2);border-radius:10px;z-index:200;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.4);max-height:220px;overflow-y:auto;}
+.autocomplete-item{padding:12px 16px;cursor:pointer;font-size:0.9rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px;-webkit-tap-highlight-color:transparent;}
+.autocomplete-item:last-child{border-bottom:none;}
+.autocomplete-item:active,.autocomplete-item.selected{background:rgba(56,189,248,0.12);}
+.autocomplete-name{color:var(--snow);}
+.autocomplete-meta{font-size:0.75rem;color:var(--muted);}
+.autocomplete-manual{color:var(--accent);font-size:0.85rem;}
+
+/* Location display */
+.location-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
+.chip{background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);border-radius:20px;padding:4px 12px;font-size:0.75rem;color:var(--accent2);}
+
+.btn-add{width:100%;margin-top:16px;background:linear-gradient(135deg,#0369a1,#0284c7);border:none;border-radius:12px;color:#fff;font-family:'Noto Serif TC',serif;font-size:1rem;padding:14px;cursor:pointer;letter-spacing:0.08em;min-height:var(--tap);-webkit-tap-highlight-color:transparent;}
+.btn-add:active{opacity:0.85;transform:scale(0.99);}
+.btn-add:disabled{opacity:0.5;}
+
+/* Filter */
+.filter-card{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden;}
+.filter-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;min-height:var(--tap);-webkit-tap-highlight-color:transparent;}
+.filter-title{font-size:0.72rem;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+.filter-badge{background:var(--accent2);color:#0a0e1a;border-radius:20px;font-size:0.68rem;padding:2px 8px;font-weight:700;display:none;}
+.filter-badge.on{display:inline-block;}
+.filter-chevron{color:var(--muted);transition:transform 0.3s;font-size:1rem;}
+.filter-chevron.open{transform:rotate(180deg);}
+.filter-body{display:none;padding:0 18px 18px;}
+.filter-body.open{display:block;}
+.filter-chips-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.filter-chip{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:7px 14px;font-size:0.8rem;color:var(--muted);cursor:pointer;min-height:34px;display:flex;align-items:center;-webkit-tap-highlight-color:transparent;transition:all 0.15s;}
+.filter-chip.active{background:rgba(56,189,248,0.15);border-color:var(--accent2);color:var(--accent2);}
+.filter-group-label{font-size:0.68rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin:10px 0 6px;}
+.filter-result{font-size:0.75rem;color:var(--muted);text-align:center;padding-top:10px;}
+.btn-reset{background:none;border:none;color:var(--muted);font-size:0.75rem;font-family:'Noto Serif TC',serif;cursor:pointer;padding:6px 0;text-decoration:underline;}
+
+/* Entries */
+.entries-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.entries-label{font-size:0.72rem;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;}
+.entries-controls{display:flex;gap:6px;}
+.btn-icon{background:none;border:1px solid var(--border);border-radius:8px;color:var(--accent);font-size:0.75rem;padding:6px 12px;cursor:pointer;font-family:'Noto Serif TC',serif;min-height:34px;display:flex;align-items:center;gap:4px;-webkit-tap-highlight-color:transparent;}
+.btn-danger-icon{border-color:rgba(248,113,113,0.3);color:var(--danger);}
+.entries-list{display:flex;flex-direction:column;gap:8px;}
+
+.entry-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:border-color 0.2s;}
+.entry-card:active{border-color:var(--accent2);background:#1f2d42;}
+.entry-num{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--accent);min-width:32px;text-align:center;line-height:1;}
+.entry-info{flex:1;min-width:0;}
+.entry-resort{font-size:0.95rem;color:var(--snow);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.entry-location{font-size:0.72rem;color:var(--accent2);margin-bottom:3px;}
+.entry-meta{font-size:0.72rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;}
+.entry-days{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent2);line-height:1;text-align:right;white-space:nowrap;}
+.entry-days-label{font-size:0.68rem;color:var(--muted);text-align:right;}
+
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:0.9rem;border:1px dashed var(--border);border-radius:14px;}
+.empty-icon{font-size:2.5rem;margin-bottom:12px;}
+
+/* Modal */
+.modal-backdrop{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;}
+.modal-backdrop.open{display:flex;}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:22px 22px 0 0;padding:0 0 env(safe-area-inset-bottom,20px);width:100%;max-width:600px;transform:translateY(100%);transition:transform 0.32s cubic-bezier(.32,1,.23,1);max-height:92vh;overflow-y:auto;}
+.modal-backdrop.open .modal{transform:translateY(0);}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0;}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0;}
+.modal-title{font-size:0.75rem;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;}
+.btn-modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.4rem;line-height:1;padding:4px;min-width:var(--tap);min-height:var(--tap);display:flex;align-items:center;justify-content:flex-end;}
+.modal-body{padding:16px 20px 20px;}
+.modal-actions{display:flex;gap:10px;padding:0 20px 20px;}
+.btn-save{flex:1;background:linear-gradient(135deg,#0369a1,#0284c7);border:none;border-radius:12px;color:#fff;font-family:'Noto Serif TC',serif;font-size:1rem;padding:14px;cursor:pointer;min-height:var(--tap);}
+.btn-save:active{opacity:0.85;}
+.btn-save:disabled{opacity:0.5;}
+.btn-modal-delete{background:none;border:1px solid rgba(248,113,113,0.4);border-radius:12px;color:var(--danger);font-family:'Noto Serif TC',serif;font-size:0.9rem;padding:14px 18px;cursor:pointer;min-height:var(--tap);}
+.btn-modal-delete:active{background:rgba(248,113,113,0.12);}
+
+@media(min-width:480px){
+  .field-row{grid-template-columns:1fr 1fr;}
+}
 </style>
 </head>
 <body>
 
-<!-- Loading -->
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loading-logo">❄ 雪齡</div>
   <div class="loading-spinner"></div>
   <div class="loading-text">連接中…</div>
 </div>
-
-<!-- Toast -->
 <div class="toast" id="toast"></div>
-
-<!-- Snow -->
 <div class="snow-bg" id="snowBg"></div>
 
-<!-- ── Login screen ── -->
+<!-- Login -->
 <div id="loginScreen">
   <div class="login-logo">雪 齡</div>
   <div class="login-subtitle">SKI DAYS TRACKER</div>
   <div class="login-card">
     <h2>登入以繼續</h2>
-    <p>使用 Google 帳號登入<br>你的紀錄將安全地儲存在雲端</p>
+    <p>使用 Google 帳號登入<br>紀錄安全儲存在雲端</p>
     <button class="btn-google" onclick="window._fbSignIn()">
       <svg width="20" height="20" viewBox="0 0 48 48">
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -379,12 +241,12 @@
   </div>
 </div>
 
-<!-- ── Main app ── -->
+<!-- Main App -->
 <div id="mainApp">
   <div class="container">
     <header>
       <div class="logo">雪 齡</div>
-      <div class="subtitle">SKI DAYS TRACKER · 累積你的雪上歲月</div>
+      <div class="subtitle">SKI DAYS TRACKER</div>
     </header>
 
     <div class="user-bar">
@@ -392,15 +254,15 @@
       <span id="userEmail"></span>
       <button class="btn-signout" onclick="window._fbSignOut()">登出</button>
     </div>
-
     <div class="sync-bar">
       <div class="sync-dot syncing" id="syncDot"></div>
       <span id="syncLabel">連接中…</span>
     </div>
 
+    <!-- Total -->
     <div class="total-banner">
       <div>
-        <div class="total-label">⛷ 累積雪齡</div>
+        <div class="total-label" id="totalLabel">⛷ 累積雪齡</div>
         <div class="total-days" id="totalDays">0</div>
         <div class="total-unit">天</div>
       </div>
@@ -409,225 +271,548 @@
       </div>
     </div>
 
+    <!-- Add form -->
     <div class="form-card">
-      <div class="form-title">＋ 新增滑雪紀錄</div>
-      <div class="form-grid">
-        <div class="field">
-          <label>開始日期（選填）</label>
-          <input type="date" id="inputDateStart" onchange="onDateChange()">
+      <div class="section-title">＋ 新增紀錄</div>
+      <div class="form-col">
+        <div class="field-row">
+          <div class="field"><label>開始日期</label><input type="date" id="inputDateStart" onchange="onDateChange()"></div>
+          <div class="field"><label>結束日期</label><input type="date" id="inputDateEnd" onchange="onDateChange()"></div>
         </div>
         <div class="field">
-          <label>結束日期（選填）</label>
-          <input type="date" id="inputDateEnd" onchange="onDateChange()">
+          <label>雪場名稱 *</label>
+          <div class="resort-wrap">
+            <input type="text" id="inputResort" placeholder="輸入雪場名稱…" autocomplete="off" oninput="onResortInput(this.value,'input')" onfocus="onResortInput(this.value,'input')">
+            <div class="autocomplete-list" id="inputAutoList" style="display:none"></div>
+          </div>
         </div>
-        <div class="field full">
-          <label>雪場 *</label>
-          <input type="text" id="inputResort" placeholder="例：北海道二世谷、奧地利 Ischgl…">
+        <div id="inputLocationChips" class="location-chips" style="display:none"></div>
+        <div class="field-row">
+          <div class="field"><label>國家</label><input type="text" id="inputCountry" placeholder="自動填入"></div>
+          <div class="field"><label>地區</label><input type="text" id="inputArea" placeholder="自動填入"></div>
         </div>
-        <div class="field">
-          <label>天數 *</label>
-          <input type="number" id="inputDays" placeholder="0" min="1" max="365">
-        </div>
-        <div class="field">
-          <label>備註（選填）</label>
-          <input type="text" id="inputNote" placeholder="例：粉雪季、初學">
+        <div class="field-row">
+          <div class="field"><label>天數 *</label><input type="number" id="inputDays" placeholder="0" min="1" max="365" inputmode="numeric"></div>
+          <div class="field"><label>備註</label><input type="text" id="inputNote" placeholder="粉雪、初學…"></div>
         </div>
       </div>
       <button class="btn-add" id="btnAdd" onclick="addEntry()">加入紀錄</button>
     </div>
 
+    <!-- Filter -->
+    <div class="filter-card">
+      <div class="filter-header" onclick="toggleFilter()">
+        <div class="filter-title">🔍 篩選 <span class="filter-badge" id="filterBadge">篩選中</span></div>
+        <span class="filter-chevron" id="filterChevron">▾</span>
+      </div>
+      <div class="filter-body" id="filterBody">
+        <div class="filter-group-label">國家</div>
+        <div class="filter-chips-row" id="chipCountry"></div>
+        <div class="filter-group-label">地區</div>
+        <div class="filter-chips-row" id="chipArea"></div>
+        <div class="filter-group-label">年份</div>
+        <div class="filter-chips-row" id="chipYear"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div class="filter-result" id="filterResult"></div>
+          <button class="btn-reset" onclick="resetFilter()">清除篩選</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- List -->
     <div class="entries-header">
       <div class="entries-label">歷年紀錄</div>
       <div class="entries-controls">
-        <button class="btn-sort" onclick="toggleSort()">
-          <span class="sort-arrow" id="sortArrow">↓</span>
-          <span id="sortLabel">新到舊</span>
+        <button class="btn-icon" onclick="toggleSort()">
+          <span id="sortArrow">↓</span><span id="sortLabel">新到舊</span>
         </button>
-        <button class="btn-clear" onclick="clearAll()">清除全部</button>
+        <button class="btn-icon btn-danger-icon" onclick="clearAll()">清除</button>
       </div>
     </div>
     <div class="entries-list" id="entriesList"></div>
   </div>
 </div>
 
+<!-- Edit Modal -->
+<div class="modal-backdrop" id="editModal" onclick="onBackdropClick(event)">
+  <div class="modal" id="modalBox">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">✏ 編輯紀錄</div>
+      <button class="btn-modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-col">
+        <div class="field-row">
+          <div class="field"><label>開始日期</label><input type="date" id="editDateStart" onchange="onEditDateChange()"></div>
+          <div class="field"><label>結束日期</label><input type="date" id="editDateEnd" onchange="onEditDateChange()"></div>
+        </div>
+        <div class="field">
+          <label>雪場名稱 *</label>
+          <div class="resort-wrap">
+            <input type="text" id="editResort" placeholder="雪場名稱" autocomplete="off" oninput="onResortInput(this.value,'edit')" onfocus="onResortInput(this.value,'edit')">
+            <div class="autocomplete-list" id="editAutoList" style="display:none"></div>
+          </div>
+        </div>
+        <div id="editLocationChips" class="location-chips" style="display:none"></div>
+        <div class="field-row">
+          <div class="field"><label>國家</label><input type="text" id="editCountry" placeholder="自動填入"></div>
+          <div class="field"><label>地區</label><input type="text" id="editArea" placeholder="自動填入"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>天數 *</label><input type="number" id="editDays" placeholder="0" min="1" max="365" inputmode="numeric"></div>
+          <div class="field"><label>備註</label><input type="text" id="editNote" placeholder="備註"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-delete" onclick="deleteFromModal()">刪除</button>
+      <button class="btn-save" id="btnSave" onclick="saveEdit()">儲存</button>
+    </div>
+  </div>
+</div>
+
 <script>
-// ── Snow ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════
+// 雪場資料庫
+// ═══════════════════════════════════════════════════════
+const RESORT_DB = [
+  // ── 日本・北海道 ──
+  {n:'ニセコアンヌプリ',a:['ニセコ','niseko','二世谷','Niseko Annupuri'],c:'日本',r:'北海道'},
+  {n:'留壽都',a:['ルスツ','rusutsu'],c:'日本',r:'北海道'},
+  {n:'キロロ',a:['kiroro','キロロ','Kiroro'],c:'日本',r:'北海道'},
+  {n:'富良野',a:['furano','フラノ','Furano'],c:'日本',r:'北海道'},
+  {n:'サッポロテイネ',a:['teine','テイネ','手稲'],c:'日本',r:'北海道'},
+  {n:'札幌国際',a:['sapporo kokusai','札幌国際'],c:'日本',r:'北海道'},
+  {n:'トマム',a:['tomamu','星野リゾート トマム'],c:'日本',r:'北海道'},
+  {n:'カムイスキーリンクス',a:['kamui','カムイ'],c:'日本',r:'北海道'},
+  {n:'ノーザンアーク',a:['northern arc'],c:'日本',r:'北海道'},
+
+  // ── 日本・長野 ──
+  {n:'白馬八方尾根',a:['happo','八方','happo-one','白馬八方'],c:'日本',r:'長野'},
+  {n:'白馬岩岳',a:['iwatake','岩岳'],c:'日本',r:'長野'},
+  {n:'白馬五竜',a:['goryu','五竜','Goryu'],c:'日本',r:'長野'},
+  {n:'栂池高原',a:['tsugaike','栂池'],c:'日本',r:'長野'},
+  {n:'志賀高原',a:['shiga kogen','志賀'],c:'日本',r:'長野'},
+  {n:'野沢温泉',a:['nozawa','野沢','Nozawa Onsen'],c:'日本',r:'長野'},
+  {n:'菅平高原',a:['sugadaira','菅平'],c:'日本',r:'長野'},
+  {n:'鹿島槍',a:['kashimayari'],c:'日本',r:'長野'},
+
+  // ── 日本・新潟 ──
+  {n:'岩原',a:['iwappara','岩原スキー場'],c:'日本',r:'新潟'},
+  {n:'苗場',a:['naeba','苗場スキー場'],c:'日本',r:'新潟'},
+  {n:'かぐら',a:['kagura','神楽'],c:'日本',r:'新潟'},
+  {n:'GALA湯沢',a:['gala','GALA','ガーラ'],c:'日本',r:'新潟'},
+  {n:'湯沢中里',a:['nakasato','中里'],c:'日本',r:'新潟'},
+  {n:'石打丸山',a:['ishiuchi','石打'],c:'日本',r:'新潟'},
+  {n:'上越国際',a:['joetsu kokusai','上越国際'],c:'日本',r:'新潟'},
+  {n:'NASPAスキーガーデン',a:['naspa'],c:'日本',r:'新潟'},
+  {n:'六日町八海山',a:['muikamachi','六日町'],c:'日本',r:'新潟'},
+
+  // ── 日本・群馬 ──
+  {n:'草津国際',a:['kusatsu','草津'],c:'日本',r:'群馬'},
+  {n:'尾瀬岩鞍',a:['oze iwakura','岩鞍'],c:'日本',r:'群馬'},
+  {n:'万座温泉',a:['manza','万座'],c:'日本',r:'群馬'},
+  {n:'たんばらラベンダーパーク',a:['tambara'],c:'日本',r:'群馬'},
+
+  // ── 日本・栃木 ──
+  {n:'那須高原',a:['nasu','那須'],c:'日本',r:'栃木'},
+
+  // ── 日本・岐阜 ──
+  {n:'白川郷',a:['shirakawago'],c:'日本',r:'岐阜'},
+  {n:'高鷲スノーパーク',a:['takasu','高鷲'],c:'日本',r:'岐阜'},
+  {n:'ダイナランド',a:['dynaland','ダイナ'],c:'日本',r:'岐阜'},
+
+  // ── 日本・兵庫 ──
+  {n:'ハチ高原',a:['hachi','ハチ'],c:'日本',r:'兵庫'},
+  {n:'ハチ北',a:['hachibei','ハチ北'],c:'日本',r:'兵庫'},
+
+  // ── 日本・山形 ──
+  {n:'蔵王温泉',a:['zao','蔵王'],c:'日本',r:'山形'},
+  {n:'月山',a:['gassan'],c:'日本',r:'山形'},
+
+  // ── 奧地利 ──
+  {n:'Ischgl',a:['ischgl','伊施格爾'],c:'奧地利',r:'提洛爾'},
+  {n:'St. Anton',a:['st anton','st. anton','聖安東'],c:'奧地利',r:'提洛爾'},
+  {n:'Kitzbühel',a:['kitzbuehel','kitzbuhel','基茨比厄爾'],c:'奧地利',r:'提洛爾'},
+  {n:'Sölden',a:['solden','索爾登'],c:'奧地利',r:'提洛爾'},
+  {n:'Mayrhofen',a:['mayrhofen'],c:'奧地利',r:'提洛爾'},
+  {n:'Lech Zürs',a:['lech','lech zurs'],c:'奧地利',r:'福爾阿爾貝格'},
+  {n:'Schladming',a:['schladming'],c:'奧地利',r:'施蒂里亞'},
+
+  // ── 瑞士 ──
+  {n:'Zermatt',a:['zermatt','采爾馬特'],c:'瑞士',r:'瓦萊州'},
+  {n:'Verbier',a:['verbier','韋爾比耶'],c:'瑞士',r:'瓦萊州'},
+  {n:'St. Moritz',a:['st moritz','st. moritz','聖莫里茲'],c:'瑞士',r:'格勞賓登'},
+  {n:'Davos',a:['davos','達沃斯'],c:'瑞士',r:'格勞賓登'},
+  {n:'Grindelwald',a:['grindelwald','格林德瓦'],c:'瑞士',r:'伯恩高地'},
+  {n:'Wengen',a:['wengen'],c:'瑞士',r:'伯恩高地'},
+  {n:'Saas-Fee',a:['saas fee','saas-fee'],c:'瑞士',r:'瓦萊州'},
+
+  // ── 法國 ──
+  {n:'Chamonix',a:['chamonix','夏蒙尼'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+  {n:'Méribel',a:['meribel','méribel'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+  {n:'Courchevel',a:['courchevel'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+  {n:'Val Thorens',a:['val thorens'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+  {n:'Les Arcs',a:['les arcs'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+  {n:'La Plagne',a:['la plagne'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+  {n:'Tignes',a:['tignes'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+  {n:'Val d\'Isère',a:['val disere','val d\'isere'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+  {n:'Alpe d\'Huez',a:['alpe dhuez','alpe d\'huez'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
+
+  // ── 義大利 ──
+  {n:'Cortina d\'Ampezzo',a:['cortina','科爾蒂納'],c:'義大利',r:'威尼托'},
+  {n:'Sestriere',a:['sestriere'],c:'義大利',r:'皮埃蒙特'},
+  {n:'Madonna di Campiglio',a:['madonna','campiglio'],c:'義大利',r:'特倫托'},
+  {n:'Livigno',a:['livigno'],c:'義大利',r:'倫巴第'},
+
+  // ── 加拿大 ──
+  {n:'Whistler Blackcomb',a:['whistler','惠斯勒'],c:'加拿大',r:'不列顛哥倫比亞'},
+  {n:'Banff Sunshine',a:['banff sunshine','sunshine village'],c:'加拿大',r:'亞伯達'},
+  {n:'Lake Louise',a:['lake louise','露易絲湖'],c:'加拿大',r:'亞伯達'},
+  {n:'Mont-Tremblant',a:['tremblant','mont tremblant'],c:'加拿大',r:'魁北克'},
+  {n:'Big White',a:['big white'],c:'加拿大',r:'不列顛哥倫比亞'},
+  {n:'Silver Star',a:['silver star'],c:'加拿大',r:'不列顛哥倫比亞'},
+
+  // ── 美國 ──
+  {n:'Vail',a:['vail','韋爾'],c:'美國',r:'科羅拉多'},
+  {n:'Aspen',a:['aspen','阿斯彭'],c:'美國',r:'科羅拉多'},
+  {n:'Breckenridge',a:['breckenridge'],c:'美國',r:'科羅拉多'},
+  {n:'Steamboat',a:['steamboat'],c:'美國',r:'科羅拉多'},
+  {n:'Park City',a:['park city'],c:'美國',r:'猶他'},
+  {n:'Deer Valley',a:['deer valley'],c:'美國',r:'猶他'},
+  {n:'Alta',a:['alta'],c:'美國',r:'猶他'},
+  {n:'Snowbird',a:['snowbird'],c:'美國',r:'猶他'},
+  {n:'Jackson Hole',a:['jackson hole','傑克遜'],c:'美國',r:'懷俄明'},
+  {n:'Mammoth Mountain',a:['mammoth','猛獁'],c:'美國',r:'加利福尼亞'},
+  {n:'Lake Tahoe',a:['tahoe','太浩湖'],c:'美國',r:'加利福尼亞'},
+
+  // ── 韓國 ──
+  {n:'龍平',a:['yongpyong','용평','龍平'],c:'韓國',r:'江原道'},
+  {n:'鳳凰城',a:['phoenix park','phoenix','鳳凰','봉황'],c:'韓國',r:'江原道'},
+  {n:'High1',a:['high1','하이원'],c:'韓國',r:'江原道'},
+  {n:'維瓦爾第',a:['vivaldi','비발디','Vivaldi Park'],c:'韓國',r:'江原道'},
+  {n:'Bears Town',a:['bears town','베어스타운'],c:'韓國',r:'京畿道'},
+
+  // ── 紐西蘭 ──
+  {n:'Coronet Peak',a:['coronet peak','coronet'],c:'紐西蘭',r:'皇后鎮'},
+  {n:'The Remarkables',a:['remarkables'],c:'紐西蘭',r:'皇后鎮'},
+  {n:'Cardrona',a:['cardrona'],c:'紐西蘭',r:'中奧塔哥'},
+  {n:'Mt Hutt',a:['mt hutt','mt. hutt'],c:'紐西蘭',r:'坎特伯雷'},
+];
+
+// 搜尋函式：支援中日英文模糊比對
+function searchResort(q) {
+  if (!q || q.length < 1) return [];
+  const lq = q.toLowerCase().replace(/\s+/g,'');
+  const scored = RESORT_DB.map(r => {
+    const names = [r.n, ...r.a].map(s => s.toLowerCase().replace(/\s+/g,''));
+    let score = 0;
+    for (const nm of names) {
+      if (nm === lq) { score = 100; break; }
+      if (nm.startsWith(lq)) { score = Math.max(score, 80); }
+      else if (nm.includes(lq)) { score = Math.max(score, 60); }
+      else if (lq.length >= 2) {
+        // character-by-character partial (for CJK)
+        let matched = 0;
+        for (const ch of lq) { if (nm.includes(ch)) matched++; }
+        if (matched / lq.length > 0.5) score = Math.max(score, 30 + matched * 5);
+      }
+    }
+    return { resort: r, score };
+  }).filter(x => x.score > 0).sort((a,b) => b.score - a.score);
+  return scored.slice(0, 6).map(x => x.resort);
+}
+
+// ─────────────────────────────────────────────────────
+// Snow particles
 const snowBg = document.getElementById('snowBg');
-for (let i = 0; i < 42; i++) {
-  const f = document.createElement('div');
-  f.className = 'flake';
-  f.textContent = ['❄','❅','❆','✦','·','*'][Math.floor(Math.random()*6)];
-  f.style.left = Math.random() * 100 + 'vw';
-  f.style.fontSize = (0.6 + Math.random() * 1.2) + 'rem';
-  f.style.animationDuration = (6 + Math.random() * 14) + 's';
-  f.style.animationDelay = '-' + (Math.random() * 15) + 's';
-  f.style.opacity = 0.15 + Math.random() * 0.4;
+for (let i = 0; i < 36; i++) {
+  const f = document.createElement('div'); f.className = 'flake';
+  f.textContent = ['❄','❅','❆','✦','·'][Math.floor(Math.random()*5)];
+  f.style.left = Math.random()*100+'vw';
+  f.style.fontSize = (0.5+Math.random()*1.1)+'rem';
+  f.style.animationDuration = (7+Math.random()*13)+'s';
+  f.style.animationDelay = '-'+(Math.random()*15)+'s';
+  f.style.opacity = 0.1+Math.random()*0.35;
   snowBg.appendChild(f);
 }
 
-// ── State ─────────────────────────────────────────────
+// State
 window.entries = [];
 let sortOrder = 'desc';
+let editingId = null;
+let filterOpen = false;
+let activeFilters = { country:'', area:'', year:'' };
 
 // ── UI helpers ────────────────────────────────────────
 function hideLoading() {
   const el = document.getElementById('loadingOverlay');
-  if (!el) return;
-  el.classList.add('hidden');
-  setTimeout(() => el.remove(), 600);
+  if (!el) return; el.classList.add('hidden'); setTimeout(()=>el.remove(),600);
+}
+function setSyncStatus(s,l){ const d=document.getElementById('syncDot'),lb=document.getElementById('syncLabel'); if(d)d.className='sync-dot '+s; if(lb)lb.textContent=l; }
+function showToast(msg,dur=2600){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),dur); }
+function getSkiAgeLabel(d){ if(d===0)return'尚無紀錄'; if(d<10)return'🐣 初學者'; if(d<30)return'🎿 入門滑手'; if(d<60)return'⛷ 熟練滑手'; if(d<100)return'🏔 進階好手'; if(d<200)return'🥇 資深雪客'; return'🦅 雪場傳說'; }
+function formatDateRange(e){ if(e.dateStart&&e.dateEnd)return e.dateStart+' ～ '+e.dateEnd; if(e.dateStart)return e.dateStart; if(e.dateEnd)return e.dateEnd; if(e.date)return e.date; return e.year?e.year+' 年':'—'; }
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── Autocomplete ──────────────────────────────────────
+let autoTimeout = null;
+function onResortInput(val, ctx) {
+  clearTimeout(autoTimeout);
+  autoTimeout = setTimeout(() => showAutoList(val, ctx), 80);
 }
 
-function setSyncStatus(state, label) {
-  const dot = document.getElementById('syncDot');
-  const lbl = document.getElementById('syncLabel');
-  if (dot) dot.className = 'sync-dot ' + state;
-  if (lbl) lbl.textContent = label;
+function showAutoList(val, ctx) {
+  const listId = ctx==='input' ? 'inputAutoList' : 'editAutoList';
+  const list = document.getElementById(listId);
+  const results = searchResort(val);
+
+  if (results.length === 0) { list.style.display='none'; return; }
+
+  list.innerHTML = results.map((r,i) => `
+    <div class="autocomplete-item" ontouchstart="" onclick="selectResort(${JSON.stringify(r).replace(/"/g,'&quot;')},'${ctx}')">
+      <div class="autocomplete-name">${escHtml(r.n)}</div>
+      <div class="autocomplete-meta">${escHtml(r.c)} · ${escHtml(r.r)}</div>
+    </div>
+  `).join('') + `
+    <div class="autocomplete-item" onclick="closeAutoList('${ctx}')">
+      <div class="autocomplete-manual">✎ 直接使用「${escHtml(val)}」</div>
+    </div>`;
+  list.style.display = 'block';
 }
 
-function showToast(msg, duration = 2400) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
+function selectResort(r, ctx) {
+  const pre = ctx==='input' ? 'input' : 'edit';
+  document.getElementById(pre+'Resort').value = r.n;
+  document.getElementById(pre+'Country').value = r.c;
+  document.getElementById(pre+'Area').value = r.r;
+  showLocationChips(r.c, r.r, pre);
+  closeAutoList(ctx);
 }
 
-// ── Helpers ───────────────────────────────────────────
-function getSkiAgeLabel(days) {
-  if (days === 0)  return '尚無紀錄';
-  if (days < 10)  return '🐣 初學者';
-  if (days < 30)  return '🎿 入門滑手';
-  if (days < 60)  return '⛷ 熟練滑手';
-  if (days < 100) return '🏔 進階好手';
-  if (days < 200) return '🥇 資深雪客';
-  return '🦅 雪場傳說';
+function closeAutoList(ctx) {
+  const id = ctx==='input' ? 'inputAutoList' : 'editAutoList';
+  document.getElementById(id).style.display='none';
 }
 
-function formatDateRange(e) {
-  if (e.dateStart && e.dateEnd) return e.dateStart + ' ～ ' + e.dateEnd;
-  if (e.dateStart)              return e.dateStart + ' 起';
-  if (e.dateEnd)                return e.dateEnd + ' 止';
-  if (e.date)                   return e.date;
-  return e.year ? e.year + ' 年' : '—';
+function showLocationChips(country, area, pre) {
+  const wrap = document.getElementById(pre+'LocationChips');
+  if (!country && !area) { wrap.style.display='none'; return; }
+  wrap.style.display='flex';
+  wrap.innerHTML = [country,area].filter(Boolean).map(v=>`<span class="chip">${escHtml(v)}</span>`).join('');
 }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// Close autocomplete when tapping outside
+document.addEventListener('click', e => {
+  if (!e.target.closest('.resort-wrap')) {
+    document.getElementById('inputAutoList').style.display='none';
+    document.getElementById('editAutoList').style.display='none';
+  }
+});
+
+// ── Filter ────────────────────────────────────────────
+function toggleFilter() {
+  filterOpen = !filterOpen;
+  document.getElementById('filterBody').classList.toggle('open', filterOpen);
+  document.getElementById('filterChevron').classList.toggle('open', filterOpen);
+}
+
+function updateFilterOptions() {
+  const countries = [...new Set(window.entries.map(e=>e.country).filter(Boolean))].sort();
+  const areas     = [...new Set(window.entries.map(e=>e.area).filter(Boolean))].sort();
+  const years     = [...new Set(window.entries.map(e=>e.year).filter(Boolean))].sort((a,b)=>b-a);
+
+  function renderChips(containerId, items, filterKey) {
+    const el = document.getElementById(containerId);
+    if (items.length === 0) { el.innerHTML='<span style="font-size:0.75rem;color:var(--muted)">—</span>'; return; }
+    el.innerHTML = items.map(v => `
+      <button class="filter-chip ${String(activeFilters[filterKey])===String(v)?'active':''}" onclick="setFilter('${filterKey}','${v}')">
+        ${escHtml(v)}
+      </button>`).join('');
+  }
+  renderChips('chipCountry', countries, 'country');
+  renderChips('chipArea', areas, 'area');
+  renderChips('chipYear', years, 'year');
+}
+
+function setFilter(key, val) {
+  activeFilters[key] = activeFilters[key]===String(val) ? '' : String(val);
+  const hasFilter = Object.values(activeFilters).some(v=>v!=='');
+  document.getElementById('filterBadge').classList.toggle('on', hasFilter);
+  updateFilterOptions();
+  render();
+}
+
+function resetFilter() {
+  activeFilters = { country:'', area:'', year:'' };
+  document.getElementById('filterBadge').classList.remove('on');
+  updateFilterOptions(); render();
+}
+
+function getFiltered() {
+  return window.entries.filter(e => {
+    if (activeFilters.country && (e.country||'') !== activeFilters.country) return false;
+    if (activeFilters.area    && (e.area||'')    !== activeFilters.area)    return false;
+    if (activeFilters.year    && String(e.year||'') !== activeFilters.year) return false;
+    return true;
+  });
 }
 
 // ── Render ────────────────────────────────────────────
 function render() {
-  const total = window.entries.reduce((s, e) => s + (e.days || 0), 0);
+  const filtered = getFiltered();
+  const hasFilter = Object.values(activeFilters).some(v=>v!=='');
+  const total = filtered.reduce((s,e)=>s+(e.days||0),0);
+
   document.getElementById('totalDays').textContent = total;
   document.getElementById('skiAgeBadge').textContent = getSkiAgeLabel(total);
+  document.getElementById('totalLabel').textContent = hasFilter ? '⛷ 篩選雪齡' : '⛷ 累積雪齡';
+  document.getElementById('filterResult').textContent = hasFilter ? `共 ${filtered.length} 筆・合計 ${total} 天` : '';
 
   const list = document.getElementById('entriesList');
-  if (window.entries.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🏔</div>還沒有任何紀錄<br>填寫上方表單，開始累積你的雪齡吧！</div>`;
+  if (filtered.length === 0) {
+    list.innerHTML=`<div class="empty-state"><div class="empty-icon">${hasFilter?'🔍':'🏔'}</div>${hasFilter?'沒有符合篩選的紀錄':'還沒有任何紀錄<br>新增你的第一筆滑雪紀錄吧！'}</div>`;
     return;
   }
 
-  const sorted = [...window.entries].sort((a, b) => {
-    const dir = sortOrder === 'desc' ? -1 : 1;
-    const aKey = a.dateStart || a.date || String(a.year || 0);
-    const bKey = b.dateStart || b.date || String(b.year || 0);
-    return dir * aKey.localeCompare(bKey);
+  const sorted = [...filtered].sort((a,b)=>{
+    const dir = sortOrder==='desc'?-1:1;
+    const ak = a.dateStart||a.date||String(a.year||0);
+    const bk = b.dateStart||b.date||String(b.year||0);
+    return dir*ak.localeCompare(bk);
   });
 
-  list.innerHTML = sorted.map((e, i) => `
-    <div class="entry-card">
-      <div class="entry-num">${sortOrder === 'desc' ? sorted.length - i : i + 1}</div>
+  list.innerHTML = sorted.map((e,i)=>`
+    <div class="entry-card" onclick="openEdit('${e.id}')">
+      <div class="entry-num">${sortOrder==='desc'?sorted.length-i:i+1}</div>
       <div class="entry-info">
-        <div class="entry-resort">${escHtml(e.resort || '')}</div>
+        <div class="entry-resort">${escHtml(e.resort||'')}</div>
+        ${(e.country||e.area)?`<div class="entry-location">📍 ${[e.country,e.area].filter(Boolean).join(' · ')}</div>`:''}
         <div class="entry-meta">
           <span>📅 ${formatDateRange(e)}</span>
-          ${e.note ? `<span>💬 ${escHtml(e.note)}</span>` : ''}
+          ${e.note?`<span>💬 ${escHtml(e.note)}</span>`:''}
         </div>
       </div>
       <div>
         <div class="entry-days">${e.days}</div>
         <div class="entry-days-label">天</div>
       </div>
-      <button class="btn-delete" onclick="deleteEntry('${e.id}')" title="刪除">✕</button>
     </div>
   `).join('');
 }
 
+// ── Sort ──────────────────────────────────────────────
 function toggleSort() {
-  sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
-  document.getElementById('sortLabel').textContent = sortOrder === 'desc' ? '新到舊' : '舊到新';
-  document.getElementById('sortArrow').className = 'sort-arrow' + (sortOrder === 'asc' ? ' asc' : '');
+  sortOrder = sortOrder==='desc'?'asc':'desc';
+  document.getElementById('sortLabel').textContent = sortOrder==='desc'?'新到舊':'舊到新';
+  document.getElementById('sortArrow').textContent = sortOrder==='desc'?'↓':'↑';
   render();
 }
 
+// ── Date calc ─────────────────────────────────────────
 function onDateChange() {
-  const start = document.getElementById('inputDateStart').value;
-  const end   = document.getElementById('inputDateEnd').value;
-  if (start && end && end >= start)
-    document.getElementById('inputDays').value = Math.round((new Date(end) - new Date(start)) / 86400000) + 1;
+  const s=document.getElementById('inputDateStart').value, e=document.getElementById('inputDateEnd').value;
+  if(s&&e&&e>=s) document.getElementById('inputDays').value=Math.round((new Date(e)-new Date(s))/86400000)+1;
+}
+function onEditDateChange() {
+  const s=document.getElementById('editDateStart').value, e=document.getElementById('editDateEnd').value;
+  if(s&&e&&e>=s) document.getElementById('editDays').value=Math.round((new Date(e)-new Date(s))/86400000)+1;
 }
 
-// ── Actions ───────────────────────────────────────────
+// ── Add ───────────────────────────────────────────────
 async function addEntry() {
-  const dateStart = document.getElementById('inputDateStart').value;
-  const dateEnd   = document.getElementById('inputDateEnd').value;
-  const resort    = document.getElementById('inputResort').value.trim();
-  const days      = parseInt(document.getElementById('inputDays').value);
-  const note      = document.getElementById('inputNote').value.trim();
+  const dateStart=document.getElementById('inputDateStart').value;
+  const dateEnd=document.getElementById('inputDateEnd').value;
+  const resort=document.getElementById('inputResort').value.trim();
+  const country=document.getElementById('inputCountry').value.trim();
+  const area=document.getElementById('inputArea').value.trim();
+  const days=parseInt(document.getElementById('inputDays').value);
+  const note=document.getElementById('inputNote').value.trim();
 
   let year;
-  if (dateStart)    year = parseInt(dateStart.slice(0,4));
-  else if (dateEnd) year = parseInt(dateEnd.slice(0,4));
+  if(dateStart) year=parseInt(dateStart.slice(0,4));
+  else if(dateEnd) year=parseInt(dateEnd.slice(0,4));
   else { showToast('⚠ 請至少填寫開始日期'); return; }
+  if(dateEnd&&dateStart&&dateEnd<dateStart){showToast('⚠ 結束日期不能早於開始日期');return;}
+  if(!resort){showToast('⚠ 請輸入雪場名稱');return;}
+  if(!days||days<1){showToast('⚠ 請輸入天數（至少 1 天）');return;}
 
-  if (dateEnd && dateStart && dateEnd < dateStart) { showToast('⚠ 結束日期不能早於開始日期'); return; }
-  if (!resort)            { showToast('⚠ 請輸入雪場名稱'); return; }
-  if (!days || days < 1)  { showToast('⚠ 請輸入天數（至少 1 天）'); return; }
-
-  const btn = document.getElementById('btnAdd');
-  btn.disabled = true; btn.textContent = '儲存中…';
-  setSyncStatus('syncing', '儲存中…');
-
+  const btn=document.getElementById('btnAdd');
+  btn.disabled=true; btn.textContent='儲存中…';
+  setSyncStatus('syncing','儲存中…');
   try {
-    await window._fbAdd({ year, dateStart, dateEnd, resort, days, note });
-    showToast('✓ 已新增：' + resort + ' ' + days + ' 天');
-    ['inputDateStart','inputDateEnd','inputResort','inputDays','inputNote'].forEach(id => {
-      document.getElementById(id).value = '';
-    });
-  } catch(err) {
-    showToast('⚠ 儲存失敗：' + err.message);
-    setSyncStatus('error', '儲存失敗');
-  }
-  btn.disabled = false; btn.textContent = '加入紀錄';
+    await window._fbAdd({year,dateStart,dateEnd,resort,country,area,days,note});
+    showToast('✓ '+resort+' '+days+' 天');
+    ['inputDateStart','inputDateEnd','inputResort','inputCountry','inputArea','inputDays','inputNote'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('inputLocationChips').style.display='none';
+    document.getElementById('inputAutoList').style.display='none';
+  } catch(err){showToast('⚠ 儲存失敗：'+err.message);setSyncStatus('error','儲存失敗');}
+  btn.disabled=false; btn.textContent='加入紀錄';
 }
 
-async function deleteEntry(id) {
-  if (!confirm('確定要刪除這筆紀錄？')) return;
-  setSyncStatus('syncing', '刪除中…');
-  try {
-    await window._fbDelete(id);
-    showToast('已刪除紀錄');
-  } catch(err) {
-    showToast('⚠ 刪除失敗：' + err.message);
-    setSyncStatus('error', '刪除失敗');
-  }
+// ── Edit modal ────────────────────────────────────────
+function openEdit(id) {
+  const e=window.entries.find(x=>x.id===id); if(!e)return;
+  editingId=id;
+  document.getElementById('editDateStart').value=e.dateStart||e.date||'';
+  document.getElementById('editDateEnd').value=e.dateEnd||'';
+  document.getElementById('editResort').value=e.resort||'';
+  document.getElementById('editCountry').value=e.country||'';
+  document.getElementById('editArea').value=e.area||'';
+  document.getElementById('editDays').value=e.days||'';
+  document.getElementById('editNote').value=e.note||'';
+  showLocationChips(e.country||'',e.area||'','edit');
+  document.getElementById('editModal').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeModal() {
+  document.getElementById('editModal').classList.remove('open');
+  document.getElementById('editAutoList').style.display='none';
+  document.body.style.overflow=''; editingId=null;
+}
+function onBackdropClick(ev){ if(ev.target===document.getElementById('editModal'))closeModal(); }
+
+async function saveEdit() {
+  if(!editingId)return;
+  const dateStart=document.getElementById('editDateStart').value;
+  const dateEnd=document.getElementById('editDateEnd').value;
+  const resort=document.getElementById('editResort').value.trim();
+  const country=document.getElementById('editCountry').value.trim();
+  const area=document.getElementById('editArea').value.trim();
+  const days=parseInt(document.getElementById('editDays').value);
+  const note=document.getElementById('editNote').value.trim();
+
+  let year;
+  if(dateStart)year=parseInt(dateStart.slice(0,4));
+  else if(dateEnd)year=parseInt(dateEnd.slice(0,4));
+  else{showToast('⚠ 請至少填寫開始日期');return;}
+  if(dateEnd&&dateStart&&dateEnd<dateStart){showToast('⚠ 結束日期不能早於開始日期');return;}
+  if(!resort){showToast('⚠ 請輸入雪場名稱');return;}
+  if(!days||days<1){showToast('⚠ 請輸入天數（至少 1 天）');return;}
+
+  const btn=document.getElementById('btnSave');
+  btn.disabled=true; btn.textContent='儲存中…';
+  setSyncStatus('syncing','儲存中…');
+  try{await window._fbUpdate(editingId,{year,dateStart,dateEnd,resort,country,area,days,note});showToast('✓ 已更新');closeModal();}
+  catch(err){showToast('⚠ 更新失敗：'+err.message);setSyncStatus('error','更新失敗');}
+  btn.disabled=false; btn.textContent='儲存';
+}
+
+async function deleteFromModal() {
+  if(!editingId)return;
+  if(!confirm('確定要刪除這筆紀錄？'))return;
+  setSyncStatus('syncing','刪除中…');
+  try{await window._fbDelete(editingId);showToast('已刪除紀錄');closeModal();}
+  catch(err){showToast('⚠ 刪除失敗：'+err.message);}
 }
 
 async function clearAll() {
-  if (!confirm('確定要清除所有紀錄？此動作無法復原。')) return;
-  setSyncStatus('syncing', '清除中…');
-  try {
-    await window._fbClearAll();
-    showToast('已清除所有紀錄');
-  } catch(err) {
-    showToast('⚠ 清除失敗：' + err.message);
-    setSyncStatus('error', '清除失敗');
-  }
+  if(!confirm('確定要清除所有紀錄？'))return;
+  setSyncStatus('syncing','清除中…');
+  try{await window._fbClearAll();showToast('已清除所有紀錄');}
+  catch(err){showToast('⚠ 清除失敗：'+err.message);}
 }
-
-document.addEventListener('keydown', e => {
-  const ids = ['inputDateStart','inputDateEnd','inputResort','inputDays','inputNote'];
-  if (e.key === 'Enter' && ids.includes(e.target.id)) addEntry();
-});
 </script>
 </body>
 </html>
