@@ -4,20 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>雪齡計算器</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link href="[https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Bebas+Neue&display=swap](https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Bebas+Neue&display=swap)" rel="stylesheet">
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+  import { initializeApp } from "[https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js](https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js)";
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, browserLocalPersistence, setPersistence, signInAnonymously }
-    from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+    from "[https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js](https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js)";
   import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, setDoc,
-    doc, getDoc, query, orderBy, serverTimestamp, writeBatch, getDocs }
-    from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+    doc, getDoc, serverTimestamp }
+    from "[https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js](https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js)";
 
-  // Configuration uses app specific domain. Fix for (auth/unauthorized-domain).
   const firebaseConfig = {
     apiKey:            "AIzaSyBFWZcPwH8D5rr5UJcUMOTQEZ6mzptkkFY",
-    // 復原為預設的 authDomain。動態抓取 hostname 無法解決 Firebase 後端白名單的問題。
     authDomain:        "snow-age-calculator.firebaseapp.com",
     projectId:         "snow-age-calculator",
     storageBucket:     "snow-age-calculator.firebasestorage.app",
@@ -33,9 +31,7 @@
   let unsubscribeSnapshots = null;
   let currentLogs = [];
   let userProfile = { goal: 0 };
-  let currentSort = { field: 'dateStart', dir: 'desc' }; // 預設排序
-
-  const snowIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M12 2v20M17 5l-5 5-5-5M22 12H2M19 17l-5-5-5 5M5 7l2 2M17 19l2 2"/></svg>`;
+  let currentSort = { field: 'dateStart', dir: 'desc' };
 
   document.addEventListener('DOMContentLoaded', () => {
     initAuth();
@@ -56,8 +52,6 @@
           await signInWithPopup(auth, provider);
         } catch(err) {
             console.error('Login error:', err);
-            
-            // 如果遇到網域未授權，嘗試使用匿名登入作為測試備案
             if(err.code === 'auth/unauthorized-domain') {
                  console.log("網域未授權，嘗試使用匿名登入作為備用方案...");
                  try {
@@ -121,12 +115,13 @@
   function loadLogs() {
     if (!currentUser) return;
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    // 移除 orderBy 避免索引要求，由前端負責排序
     const q = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'logs');
     unsubscribeSnapshots = onSnapshot(q, (snapshot) => {
       currentLogs = [];
       snapshot.forEach(doc => { currentLogs.push({ id: doc.id, ...doc.data() }); });
       updateSummaryUI();
-      renderLogLists(); // 更新為渲染列表
+      renderLogLists();
     }, (error) => {
       console.error("載入紀錄失敗:", error);
     });
@@ -155,14 +150,15 @@
       let pct = Math.min((yearAge / goal) * 100, 100);
       pgFill.style.width = `${pct}%`;
       pgText.textContent = `年度目標：${yearAge} / ${goal} 天 (${Math.round(pct)}%)`;
-      if(pct >= 100) pgFill.style.background = 'var(--accent1)'; // 達標換色
+      if(pct >= 100) pgFill.style.background = 'var(--accent1)'; 
       else pgFill.style.background = 'var(--accent2)';
     } else {
       pgContainer.style.display = 'none';
     }
 
-    // 更新最近三筆摘要
-    const recentLogs = currentLogs.slice(0, 3);
+    // 將日誌按日期排序後再取前三筆
+    const sortedForRecent = currentLogs.slice().sort((a,b) => (b.dateStart || '').localeCompare(a.dateStart || ''));
+    const recentLogs = sortedForRecent.slice(0, 3);
     const recentContainer = document.getElementById('recentLogsContainer');
     if (recentLogs.length > 0) {
         recentContainer.innerHTML = recentLogs.map(log => `
@@ -224,11 +220,9 @@
 
       tabs.forEach(tab => {
           tab.addEventListener('click', () => {
-              // 移除所有 active class
               tabs.forEach(t => t.classList.remove('active'));
               tabContents.forEach(c => c.classList.remove('active'));
 
-              // 加入 active class 到點擊的 tab
               tab.classList.add('active');
               const targetId = tab.getAttribute('data-target');
               document.getElementById(targetId).classList.add('active');
@@ -245,10 +239,9 @@
           currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
         } else {
           currentSort.field = field;
-          currentSort.dir = 'desc'; // 預設降冪
+          currentSort.dir = 'desc'; 
         }
 
-        // 更新 UI 箭頭
         headers.forEach(h => {
           h.classList.remove('asc', 'desc');
           if (h.dataset.sort === currentSort.field) {
@@ -261,15 +254,13 @@
     });
   }
 
-
   function setupModals() {
-    // New/Edit Log Modal
     const modalLog = document.getElementById('modalLog');
     document.getElementById('btnFab').addEventListener('click', () => openLogModal());
     document.getElementById('btnCloseLog').addEventListener('click', () => modalLog.style.display = 'none');
 
-    // Save Log
     document.getElementById('btnSaveLog').addEventListener('click', async () => {
+      if (!currentUser) { alert('請先登入才能儲存紀錄。'); return; }
       const id = document.getElementById('logId').value;
       const data = {
         resort: document.getElementById('inpResort').value.trim(),
@@ -303,14 +294,15 @@
         }
         modalLog.style.display = 'none';
       } catch (err) {
-        console.error(err); alert('儲存失敗');
+        console.error("儲存紀錄時發生錯誤:", err); 
+        alert('儲存失敗，請檢查網路連線或稍後再試。');
       } finally {
         btn.disabled = false; btn.textContent = '儲存紀錄';
       }
     });
 
-    // Delete Log
     document.getElementById('btnDelLog').addEventListener('click', async () => {
+      if (!currentUser) return;
       const id = document.getElementById('logId').value;
       if (!id || !confirm('確定要刪除這筆紀錄嗎？')) return;
       
@@ -322,7 +314,6 @@
       } catch(err) { console.error(err); alert('刪除失敗'); }
     });
 
-    // Profile Modal
     const modalProfile = document.getElementById('modalProfile');
     document.getElementById('btnProfile').addEventListener('click', () => {
         document.getElementById('goalDays').value = userProfile.goal || '';
@@ -335,7 +326,6 @@
         modalProfile.style.display = 'none';
     });
 
-    // Auto calculate days when dates change (simple logic)
     const inpStart = document.getElementById('inpDateStart');
     const inpEnd = document.getElementById('inpDateEnd');
     const inpDays = document.getElementById('inpDays');
@@ -345,7 +335,7 @@
             const end = new Date(inpEnd.value);
             if(end >= start) {
                 const diffTime = Math.abs(end - start);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // 包含頭尾
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
                 inpDays.value = diffDays;
             }
         } else if (inpStart.value && !inpEnd.value) {
@@ -386,7 +376,7 @@
       title.textContent = '新增紀錄';
       document.getElementById('logId').value = '';
       document.getElementById('inpResort').value = '';
-      document.getElementById('inpCountry').value = '日本'; // 預設
+      document.getElementById('inpCountry').value = '日本'; 
       document.getElementById('inpArea').value = '';
       document.getElementById('inpDateStart').value = new Date().toISOString().split('T')[0];
       document.getElementById('inpDateEnd').value = '';
@@ -403,7 +393,6 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
     }[tag] || tag));
   }
-
 </script>
 
 <style>
@@ -527,7 +516,7 @@
     <div class="login-title">雪齡計算器</div>
     <div class="login-subtitle">記錄你的每一趟滑雪旅程</div>
     <button id="btnGoogleAuth" class="btn-google">
-      <svg viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
+      <svg viewBox="0 0 24 24" width="24" height="24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
       使用 Google 登入
     </button>
   </div>
@@ -537,11 +526,10 @@
     
     <header class="app-header">
       <div class="header-user" id="btnProfile">
-        <img id="userAvatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ccc'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E" alt="User">
+        <img id="userAvatar" src="data:image/svg+xml,%3Csvg xmlns='[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)' viewBox='0 0 24 24' fill='%23ccc'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E" alt="User">
         <span id="userName">載入中...</span>
       </div>
       <div class="header-actions">
-        <!-- Profile Icon mapped to Logout for now for simplicity, or keep inside Profile Modal -->
         <svg id="btnLogout" class="header-icon" viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
       </div>
     </header>
@@ -575,7 +563,6 @@
           <div class="recent-summary">
               <div class="recent-title">最新三筆紀錄</div>
               <div id="recentLogsContainer">
-                  <!-- Recent logs injected here -->
               </div>
           </div>
         </div>
@@ -588,7 +575,6 @@
           <div class="col-days sort-header" data-sort="days">天數</div>
         </div>
         <div id="listLog" class="log-list">
-          <!-- Logs injected here -->
           <div class="empty-state">載入中...</div>
         </div>
     </div>
