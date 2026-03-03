@@ -92,7 +92,8 @@
 
   async function loadProfile() {
     if (!currentUser) return;
-    const ref = doc(db, 'users', currentUser.uid);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const ref = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'main');
     const snap = await getDoc(ref);
     if (snap.exists()) {
       userProfile = snap.data();
@@ -102,7 +103,8 @@
 
   async function updateProfileGoal(goalDays) {
      if (!currentUser) return;
-     const ref = doc(db, 'users', currentUser.uid);
+     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+     const ref = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'profile', 'main');
      await setDoc(ref, { goal: goalDays }, { merge: true });
      userProfile.goal = goalDays;
      updateSummaryUI();
@@ -110,7 +112,8 @@
 
   function loadLogs() {
     if (!currentUser) return;
-    const q = query(collection(db, 'users', currentUser.uid, 'logs'), orderBy('dateStart', 'desc'));
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const q = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'logs');
     unsubscribeSnapshots = onSnapshot(q, (snapshot) => {
       currentLogs = [];
       snapshot.forEach(doc => { currentLogs.push({ id: doc.id, ...doc.data() }); });
@@ -282,11 +285,13 @@
       const btn = document.getElementById('btnSaveLog');
       btn.disabled = true; btn.textContent = '儲存中...';
 
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
       try {
         if (id) {
-          await updateDoc(doc(db, 'users', currentUser.uid, 'logs', id), { ...data, updatedAt: serverTimestamp() });
+          await updateDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'logs', id), { ...data, updatedAt: serverTimestamp() });
         } else {
-          await addDoc(collection(db, 'users', currentUser.uid, 'logs'), { ...data, createdAt: serverTimestamp() });
+          await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'logs'), { ...data, createdAt: serverTimestamp() });
         }
         modalLog.style.display = 'none';
       } catch (err) {
@@ -300,8 +305,11 @@
     document.getElementById('btnDelLog').addEventListener('click', async () => {
       const id = document.getElementById('logId').value;
       if (!id || !confirm('確定要刪除這筆紀錄嗎？')) return;
+      
+      const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+      
       try {
-        await deleteDoc(doc(db, 'users', currentUser.uid, 'logs', id));
+        await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'logs', id));
         modalLog.style.display = 'none';
       } catch(err) { console.error(err); alert('刪除失敗'); }
     });
