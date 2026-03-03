@@ -2,256 +2,327 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>雪齡計算器</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;700&family=Bebas+Neue&display=swap" rel="stylesheet">
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
-    from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
-  import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, setDoc,
-    doc, getDoc, query, orderBy, serverTimestamp, writeBatch, getDocs }
-    from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js";
+import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, setDoc,
+  doc, getDoc, query, orderBy, serverTimestamp, writeBatch, getDocs }
+  from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
 
-  const firebaseConfig = {
-    apiKey:            "AIzaSyBFWZcPwH8D5rr5UJcUMOTQEZ6mzptkkFY",
-    authDomain:        "snow-age-calculator.firebaseapp.com",
-    projectId:         "snow-age-calculator",
-    storageBucket:     "snow-age-calculator.firebasestorage.app",
-    messagingSenderId: "527060791092",
-    appId:             "1:527060791092:web:0e96e161c944016030ff61"
-  };
-  const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getFirestore(app), COL='ski-entries';
-  let unsubscribe=null;
+const firebaseConfig = {
+  apiKey:            "AIzaSyBFWZcPwH8D5rr5UJcUMOTQEZ6mzptkkFY",
+  authDomain:        "snow-age-calculator.firebaseapp.com",
+  projectId:         "snow-age-calculator",
+  storageBucket:     "snow-age-calculator.firebasestorage.app",
+  messagingSenderId: "527060791092",
+  appId:             "1:527060791092:web:0e96e161c944016030ff61"
+};
+const app=initializeApp(firebaseConfig), auth=getAuth(app), db=getFirestore(app), COL='ski-entries';
+let unsubscribe=null;
 
-  onAuthStateChanged(auth, user => {
-    if (user) {
-      document.getElementById('loginScreen').style.display='none';
-      document.getElementById('mainApp').style.display='block';
-      document.getElementById('userEmail').textContent=user.email;
-      const av=document.getElementById('userAvatar');
-      av.src=user.photoURL||''; av.style.display=user.photoURL?'block':'none';
-      startListening(user.uid);
-    } else {
-      document.getElementById('loginScreen').style.display='flex';
-      document.getElementById('mainApp').style.display='none';
-      if(unsubscribe){unsubscribe();unsubscribe=null;}
-      window.entries=[]; hideLoading();
-    }
-  });
-  function startListening(uid){
-    if(unsubscribe)unsubscribe();
-    unsubscribe=onSnapshot(query(collection(db,'users',uid,COL),orderBy('createdAt','asc')),
-      snap=>{ window.entries=snap.docs.map(d=>({id:d.id,...d.data()})); render(); updateFilterOptions(); setSyncStatus('synced','已同步'); hideLoading(); },
-      err=>{ setSyncStatus('error','連線失敗'); hideLoading(); }
-    );
+onAuthStateChanged(auth, user=>{
+  if(user){
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('mainApp').style.display='block';
+    document.getElementById('userEmail').textContent=user.email;
+    document.getElementById('toolsEmail').textContent=user.email;
+    const av=document.getElementById('userAvatar');
+    if(av){av.src=user.photoURL||'';av.style.display=user.photoURL?'inline-block':'none';}
+    const ta=document.getElementById('toolsAvatar');
+    if(ta&&user.photoURL){ta.src=user.photoURL;ta.style.display='block';}
+    startListening(user.uid);
+  } else {
+    document.getElementById('loginScreen').style.display='flex';
+    document.getElementById('mainApp').style.display='none';
+    if(unsubscribe){unsubscribe();unsubscribe=null;}
+    window.entries=[];hideLoading();
   }
-  window._fbSignIn=async()=>{ try{await signInWithPopup(auth,new GoogleAuthProvider());}catch(e){showToast('登入失敗：'+e.message);} };
-  window._fbSignOut=async()=>{ if(!confirm('確定要登出？'))return; await signOut(auth); };
-  window._fbAdd=async(entry)=>{ const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入'); const{id,...data}=entry; await addDoc(collection(db,'users',uid,COL),{...data,createdAt:serverTimestamp()}); };
-  window._fbUpdate=async(id,data)=>{ const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入'); await updateDoc(doc(db,'users',uid,COL,id),data); };
-  window._fbDelete=async(id)=>{ const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入'); await deleteDoc(doc(db,'users',uid,COL,id)); };
-  window._fbClearAll=async()=>{ const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入'); const snap=await getDocs(collection(db,'users',uid,COL)); const batch=writeBatch(db); snap.forEach(d=>batch.delete(d.ref)); await batch.commit(); };
-
-  // ── Public share: write snapshot to public collection ───────
-  window._fbPublishShare=async()=>{
-    const uid=auth.currentUser?.uid; if(!uid)throw new Error('未登入');
-    const snap=await getDocs(collection(db,'users',uid,COL));
-    const data=snap.docs.map(d=>{ const d2={...d.data()}; delete d2.createdAt; return d2; });
-    await setDoc(doc(db,'public_shares',uid),{uid,entries:data,updatedAt:serverTimestamp()});
-  };
-
-  // ── Public share: read by uid ────────────────────────────────
-  window._fbReadShare=async(uid)=>{
-    const snap=await getDoc(doc(db,'public_shares',uid));
-    if(!snap.exists())throw new Error('找不到分享紀錄');
-    return snap.data();
-  };
-  window._fbCurrentUid=()=>auth.currentUser?.uid||null;
+});
+function startListening(uid){
+  if(unsubscribe)unsubscribe();
+  unsubscribe=onSnapshot(query(collection(db,'users',uid,COL),orderBy('createdAt','asc')),
+    snap=>{window.entries=snap.docs.map(d=>({id:d.id,...d.data()}));onDataUpdate();setSyncStatus('synced','已同步');hideLoading();},
+    err=>{setSyncStatus('error','連線失敗');hideLoading();}
+  );
+}
+window._fbSignIn=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider());}catch(e){showToast('登入失敗：'+e.message);}};
+window._fbSignOut=async()=>{if(!confirm('確定要登出？'))return;await signOut(auth);};
+window._fbAdd=async(entry)=>{const uid=auth.currentUser?.uid;if(!uid)throw new Error('未登入');const{id,...data}=entry;await addDoc(collection(db,'users',uid,COL),{...data,createdAt:serverTimestamp()});};
+window._fbUpdate=async(id,data)=>{const uid=auth.currentUser?.uid;if(!uid)throw new Error('未登入');await updateDoc(doc(db,'users',uid,COL,id),data);};
+window._fbDelete=async(id)=>{const uid=auth.currentUser?.uid;if(!uid)throw new Error('未登入');await deleteDoc(doc(db,'users',uid,COL,id));};
+window._fbClearAll=async()=>{const uid=auth.currentUser?.uid;if(!uid)throw new Error('未登入');const snap=await getDocs(collection(db,'users',uid,COL));const batch=writeBatch(db);snap.forEach(d=>batch.delete(d.ref));await batch.commit();};
+window._fbPublishShare=async()=>{const uid=auth.currentUser?.uid;if(!uid)throw new Error('未登入');const snap=await getDocs(collection(db,'users',uid,COL));const data=snap.docs.map(d=>{const d2={...d.data()};delete d2.createdAt;return d2;});await setDoc(doc(db,'public_shares',uid),{uid,entries:data,updatedAt:serverTimestamp()});};
+window._fbReadShare=async(uid)=>{const snap=await getDoc(doc(db,'public_shares',uid));if(!snap.exists())throw new Error('找不到分享紀錄');return snap.data();};
+window._fbCurrentUid=()=>auth.currentUser?.uid||null;
 </script>
 
 <style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --bg:#0a0e1a; --surface:#111827; --card:#1a2235; --border:#2a3a55;
-  --accent:#7dd3fc; --accent2:#38bdf8; --snow:#e0f2fe; --text:#cbd5e1;
-  --muted:#64748b; --danger:#f87171; --success:#4ade80;
-  --tap:48px;
+  --bg:#0a0e1a;--surface:#111827;--card:#1a2235;--border:#2a3a55;
+  --accent:#7dd3fc;--accent2:#38bdf8;--snow:#e0f2fe;--text:#cbd5e1;
+  --muted:#64748b;--danger:#f87171;--success:#4ade80;
+  --max:720px;--tap:48px;
 }
-*{box-sizing:border-box;margin:0;padding:0;}
 html{-webkit-text-size-adjust:100%;}
 body{background:var(--bg);color:var(--text);font-family:'Noto Serif TC',serif;min-height:100vh;overflow-x:hidden;}
 
 /* Snow */
 .snow-bg{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
-.flake{position:absolute;top:-20px;color:rgba(224,242,254,0.25);font-size:1rem;animation:fall linear infinite;user-select:none;}
+.flake{position:absolute;top:-20px;color:rgba(224,242,254,.2);animation:fall linear infinite;user-select:none;}
 @keyframes fall{to{transform:translateY(110vh) rotate(360deg);}}
 
 /* Loading */
-.loading-overlay{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity 0.5s;}
+.loading-overlay{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .5s;}
 .loading-overlay.hidden{opacity:0;pointer-events:none;}
-.loading-logo{font-family:'Bebas Neue',sans-serif;font-size:3rem;color:var(--snow);letter-spacing:0.1em;}
-.loading-spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent2);border-radius:50%;animation:spin 0.8s linear infinite;}
+.loading-logo{font-family:'Bebas Neue',sans-serif;font-size:3rem;color:var(--snow);letter-spacing:.1em;}
+.loading-spin{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent2);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-.loading-text{font-size:0.85rem;color:var(--muted);}
+.loading-text{font-size:.85rem;color:var(--muted);}
 
 /* Toast */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:#1e3a5f;border:1px solid var(--accent);border-radius:12px;padding:12px 24px;font-size:0.9rem;color:var(--snow);transition:transform 0.3s ease;z-index:600;white-space:nowrap;max-width:90vw;text-align:center;}
+.toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%) translateY(60px);background:#1e3a5f;border:1px solid var(--accent);border-radius:12px;padding:11px 22px;font-size:.88rem;color:var(--snow);transition:transform .3s;z-index:600;white-space:nowrap;max-width:90vw;text-align:center;pointer-events:none;}
 .toast.show{transform:translateX(-50%) translateY(0);}
 
 /* Login */
 #loginScreen{display:none;position:fixed;inset:0;z-index:10;flex-direction:column;align-items:center;justify-content:center;gap:28px;background:var(--bg);padding:20px;}
-.login-logo{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.5rem,15vw,7rem);color:var(--snow);letter-spacing:0.08em;line-height:1;text-shadow:0 0 60px rgba(125,211,252,0.5);}
-.login-subtitle{color:var(--muted);font-size:0.9rem;letter-spacing:0.15em;margin-top:-16px;}
-.login-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:32px 28px;text-align:center;width:100%;max-width:360px;}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.5rem,15vw,7rem);color:var(--snow);letter-spacing:.08em;line-height:1;text-shadow:0 0 60px rgba(125,211,252,.5);}
+.login-sub{color:var(--muted);font-size:.9rem;letter-spacing:.15em;margin-top:-16px;}
+.login-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:32px 28px;text-align:center;width:100%;max-width:380px;}
 .login-card h2{font-size:1.05rem;color:var(--snow);margin-bottom:8px;}
-.login-card p{font-size:0.85rem;color:var(--muted);margin-bottom:24px;line-height:1.7;}
-.btn-google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:15px 20px;background:#fff;border:none;border-radius:12px;font-family:'Noto Serif TC',serif;font-size:1rem;color:#1f2937;cursor:pointer;font-weight:700;box-shadow:0 2px 16px rgba(0,0,0,0.3);-webkit-tap-highlight-color:transparent;}
-.btn-google:active{transform:scale(0.97);}
+.login-card p{font-size:.85rem;color:var(--muted);margin-bottom:24px;line-height:1.7;}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:15px 20px;background:#fff;border:none;border-radius:12px;font-family:'Noto Serif TC',serif;font-size:1rem;font-weight:700;color:#1f2937;cursor:pointer;box-shadow:0 2px 16px rgba(0,0,0,.3);-webkit-tap-highlight-color:transparent;}
+.btn-google:active{transform:scale(.97);}
 
-/* Main */
+/* ── Main app ── */
 #mainApp{display:none;}
-.container{position:relative;z-index:1;max-width:600px;margin:0 auto;padding:28px 16px 100px;}
+.page-wrap{max-width:var(--max);margin:0 auto;position:relative;z-index:1;}
 
-header{text-align:center;margin-bottom:28px;}
-.logo{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.8rem,12vw,5rem);letter-spacing:0.08em;color:var(--snow);line-height:1;text-shadow:0 0 50px rgba(125,211,252,0.4);}
-.subtitle{margin-top:6px;color:var(--muted);font-size:0.82rem;letter-spacing:0.12em;}
+/* Logo + total (always visible) */
+.app-top{padding:24px 20px 0;text-align:center;}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.6rem,9vw,5rem);letter-spacing:.08em;color:var(--snow);line-height:1;text-shadow:0 0 50px rgba(125,211,252,.4);}
+.sub{font-size:.75rem;color:var(--muted);letter-spacing:.14em;margin-bottom:14px;}
 
-/* User bar */
-.user-bar{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;font-size:0.78rem;color:var(--muted);}
-.user-avatar{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);object-fit:cover;}
-.btn-signout{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:0.72rem;padding:3px 10px;cursor:pointer;font-family:'Noto Serif TC',serif;min-height:28px;}
-
-/* Sync */
-.sync-bar{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:20px;font-size:0.75rem;color:var(--muted);}
-.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background 0.4s;flex-shrink:0;}
-.sync-dot.synced{background:var(--success);box-shadow:0 0 6px rgba(74,222,128,0.6);}
+.total-banner{background:linear-gradient(135deg,#0c3d5c,#142d47);border:1px solid rgba(56,189,248,.28);border-radius:16px;padding:15px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 0 28px rgba(56,189,248,.07);margin-bottom:0;}
+.t-label{font-size:.72rem;color:var(--accent);letter-spacing:.08em;}
+.t-days{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;color:var(--snow);line-height:1;text-shadow:0 0 18px rgba(125,211,252,.4);}
+.t-unit{font-size:.78rem;color:var(--muted);}
+.t-right{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:5px;}
+.age-badge{background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.22);border-radius:8px;padding:4px 11px;font-size:.78rem;color:var(--accent);}
+.sync-row{display:flex;align-items:center;gap:5px;font-size:.68rem;color:var(--muted);}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .4s;}
+.sync-dot.synced{background:var(--success);box-shadow:0 0 5px rgba(74,222,128,.5);}
 .sync-dot.syncing{background:var(--accent2);animation:pulse 1s infinite;}
 .sync-dot.error{background:var(--danger);}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-/* Total banner */
-.total-banner{background:linear-gradient(135deg,#0c4a6e,#1e3a5f);border:1px solid var(--accent);border-radius:16px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 0 32px rgba(56,189,248,0.1);}
-.total-label{font-size:0.85rem;color:var(--accent);letter-spacing:0.08em;}
-.total-days{font-family:'Bebas Neue',sans-serif;font-size:3.2rem;color:var(--snow);line-height:1;text-shadow:0 0 24px rgba(125,211,252,0.6);}
-.total-unit{font-size:0.9rem;color:var(--muted);margin-top:2px;}
-.total-right{text-align:right;}
-.ski-age-badge{background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius:10px;padding:7px 14px;font-size:0.82rem;color:var(--accent);white-space:nowrap;}
+/* Tab bar – sticky below logo */
+.tab-bar{display:flex;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50;}
+.tab-btn{flex:1;padding:11px 6px 9px;background:none;border:none;cursor:pointer;font-family:'Noto Serif TC',serif;font-size:.7rem;color:var(--muted);letter-spacing:.04em;display:flex;flex-direction:column;align-items:center;gap:3px;-webkit-tap-highlight-color:transparent;position:relative;transition:color .2s;min-height:var(--tap);}
+.tab-btn .ti{font-size:1.1rem;line-height:1;}
+.tab-btn.active{color:var(--accent2);}
+.tab-btn.active::after{content:'';position:absolute;bottom:0;left:18%;right:18%;height:2px;background:var(--accent2);border-radius:2px 2px 0 0;}
 
-/* Form card */
-.form-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;}
-.section-title{font-size:0.72rem;letter-spacing:0.2em;color:var(--muted);margin-bottom:16px;text-transform:uppercase;}
-.form-col{display:flex;flex-direction:column;gap:12px;}
-.field{display:flex;flex-direction:column;gap:6px;}
+/* Tab panes */
+.tab-pane{display:none;padding:16px 20px 110px;}
+.tab-pane.active{display:block;}
+
+/* User mini bar */
+.user-bar{display:flex;align-items:center;gap:8px;padding:10px 0 6px;font-size:.74rem;color:var(--muted);}
+.user-avatar{width:22px;height:22px;border-radius:50%;border:1px solid var(--border);object-fit:cover;}
+.user-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.btn-signout{background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:.68rem;padding:4px 10px;cursor:pointer;font-family:'Noto Serif TC',serif;min-height:30px;flex-shrink:0;}
+
+/* Section headings */
+.sh{font-size:.68rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-bottom:11px;}
+
+/* Form */
+.form-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:17px;margin-bottom:14px;}
+.form-col{display:flex;flex-direction:column;gap:10px;}
+.field{display:flex;flex-direction:column;gap:5px;}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-label{font-size:0.72rem;color:var(--muted);letter-spacing:0.1em;}
+label{font-size:.68rem;color:var(--muted);letter-spacing:.1em;}
+input{background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:11px 13px;font-family:'Noto Serif TC',serif;font-size:1rem;outline:none;width:100%;min-height:var(--tap);-webkit-appearance:none;}
+input:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(56,189,248,.1);}
+.btn-add{width:100%;margin-top:13px;background:linear-gradient(135deg,#0369a1,#0284c7);border:none;border-radius:12px;color:#fff;font-family:'Noto Serif TC',serif;font-size:1rem;padding:14px;cursor:pointer;min-height:var(--tap);-webkit-tap-highlight-color:transparent;}
+.btn-add:active{opacity:.85;}.btn-add:disabled{opacity:.5;}
 
-input{background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font-family:'Noto Serif TC',serif;font-size:1rem;outline:none;width:100%;min-height:var(--tap);-webkit-appearance:none;}
-input:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(56,189,248,0.12);}
-input[readonly]{opacity:0.7;cursor:default;}
-
-/* Resort autocomplete */
+/* Autocomplete */
 .resort-wrap{position:relative;}
-.autocomplete-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--accent2);border-radius:10px;z-index:200;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.4);max-height:220px;overflow-y:auto;}
-.autocomplete-item{padding:12px 16px;cursor:pointer;font-size:0.9rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px;-webkit-tap-highlight-color:transparent;}
-.autocomplete-item:last-child{border-bottom:none;}
-.autocomplete-item:active,.autocomplete-item.selected{background:rgba(56,189,248,0.12);}
-.autocomplete-name{color:var(--snow);}
-.autocomplete-meta{font-size:0.75rem;color:var(--muted);}
-.autocomplete-manual{color:var(--accent);font-size:0.85rem;}
+.ac-list{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--accent2);border-radius:10px;z-index:200;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:200px;overflow-y:auto;}
+.ac-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:1px;-webkit-tap-highlight-color:transparent;}
+.ac-item:last-child{border-bottom:none;}.ac-item:active{background:rgba(56,189,248,.1);}
+.ac-name{color:var(--snow);font-size:.9rem;}.ac-meta{font-size:.72rem;color:var(--muted);}.ac-manual{color:var(--accent);font-size:.82rem;}
+.loc-chips{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.2);border-radius:20px;padding:3px 10px;font-size:.72rem;color:var(--accent2);}
 
-/* Location display */
-.location-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
-.chip{background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.25);border-radius:20px;padding:4px 12px;font-size:0.75rem;color:var(--accent2);}
+/* Entry cards */
+.entries-list{display:flex;flex-direction:column;gap:8px;}
+.entry-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px 15px;display:flex;align-items:center;gap:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:border-color .2s;}
+.entry-card:active{border-color:var(--accent2);background:#1e2d40;}
+.entry-card.ro{cursor:default;}.entry-card.ro:active{border-color:var(--border);background:var(--card);}
+.en{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--accent);min-width:28px;text-align:center;line-height:1;}
+.ei{flex:1;min-width:0;}
+.er{font-size:.93rem;color:var(--snow);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.el{font-size:.7rem;color:var(--accent2);margin-bottom:2px;}
+.em{font-size:.7rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;}
+.ed-col{text-align:right;flex-shrink:0;}
+.ed{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent2);line-height:1;}
+.edl{font-size:.65rem;color:var(--muted);}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:.9rem;border:1px dashed var(--border);border-radius:14px;line-height:1.8;}
+.empty-i{font-size:2.5rem;margin-bottom:10px;}
+.btn-see-all{width:100%;background:none;border:1px dashed var(--border);border-radius:12px;color:var(--muted);font-family:'Noto Serif TC',serif;font-size:.85rem;padding:13px;cursor:pointer;margin-top:8px;-webkit-tap-highlight-color:transparent;}
+.btn-see-all:active{border-color:var(--accent2);color:var(--accent2);}
 
-.btn-add{width:100%;margin-top:16px;background:linear-gradient(135deg,#0369a1,#0284c7);border:none;border-radius:12px;color:#fff;font-family:'Noto Serif TC',serif;font-size:1rem;padding:14px;cursor:pointer;letter-spacing:0.08em;min-height:var(--tap);-webkit-tap-highlight-color:transparent;}
-.btn-add:active{opacity:0.85;transform:scale(0.99);}
-.btn-add:disabled{opacity:0.5;}
+/* Records tab */
+.rec-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.tb-btns{display:flex;gap:6px;}
+.btn-sm{background:none;border:1px solid var(--border);border-radius:8px;color:var(--accent);font-size:.72rem;padding:5px 11px;cursor:pointer;font-family:'Noto Serif TC',serif;min-height:32px;display:flex;align-items:center;gap:3px;-webkit-tap-highlight-color:transparent;}
+.btn-sm.danger{border-color:rgba(248,113,113,.3);color:var(--danger);}
 
 /* Filter */
-.filter-card{background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:16px;overflow:hidden;}
-.filter-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;min-height:var(--tap);-webkit-tap-highlight-color:transparent;}
-.filter-title{font-size:0.72rem;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:8px;}
-.filter-badge{background:var(--accent2);color:#0a0e1a;border-radius:20px;font-size:0.68rem;padding:2px 8px;font-weight:700;display:none;}
-.filter-badge.on{display:inline-block;}
-.filter-chevron{color:var(--muted);transition:transform 0.3s;font-size:1rem;}
-.filter-chevron.open{transform:rotate(180deg);}
-.filter-body{display:none;padding:0 18px 18px;}
-.filter-body.open{display:block;}
-.filter-chips-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
-.filter-chip{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:7px 14px;font-size:0.8rem;color:var(--muted);cursor:pointer;min-height:34px;display:flex;align-items:center;-webkit-tap-highlight-color:transparent;transition:all 0.15s;}
-.filter-chip.active{background:rgba(56,189,248,0.15);border-color:var(--accent2);color:var(--accent2);}
-.filter-group-label{font-size:0.68rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin:10px 0 6px;}
-.filter-result{font-size:0.75rem;color:var(--muted);text-align:center;padding-top:10px;}
-.btn-reset{background:none;border:none;color:var(--muted);font-size:0.75rem;font-family:'Noto Serif TC',serif;cursor:pointer;padding:6px 0;text-decoration:underline;}
+.filter-card{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden;}
+.fh{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent;}
+.ft{font-size:.68rem;letter-spacing:.15em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:7px;}
+.fbadge{background:var(--accent2);color:#0a0e1a;border-radius:20px;font-size:.65rem;padding:2px 7px;font-weight:700;display:none;}.fbadge.on{display:inline-block;}
+.fchev{color:var(--muted);transition:transform .3s;}.fchev.open{transform:rotate(180deg);}
+.fbody{display:none;padding:0 16px 14px;}.fbody.open{display:block;}
+.fgl{font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin:8px 0 5px;}
+.fcrow{display:flex;flex-wrap:wrap;gap:5px;}
+.fc{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:.78rem;color:var(--muted);cursor:pointer;min-height:32px;display:flex;align-items:center;-webkit-tap-highlight-color:transparent;}
+.fc.active{background:rgba(56,189,248,.15);border-color:var(--accent2);color:var(--accent2);}
+.fbottom{display:flex;align-items:center;justify-content:space-between;margin-top:8px;}
+.fres{font-size:.72rem;color:var(--muted);}
+.btn-reset{background:none;border:none;color:var(--muted);font-size:.72rem;font-family:'Noto Serif TC',serif;cursor:pointer;text-decoration:underline;padding:4px 0;}
 
-/* Entries */
-.entries-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
-.entries-label{font-size:0.72rem;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;}
-.entries-controls{display:flex;gap:6px;}
-.btn-icon{background:none;border:1px solid var(--border);border-radius:8px;color:var(--accent);font-size:0.75rem;padding:6px 12px;cursor:pointer;font-family:'Noto Serif TC',serif;min-height:34px;display:flex;align-items:center;gap:4px;-webkit-tap-highlight-color:transparent;}
-.btn-danger-icon{border-color:rgba(248,113,113,0.3);color:var(--danger);}
-.entries-list{display:flex;flex-direction:column;gap:8px;}
+/* Tools tab */
+.tool-btn{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;width:100%;text-align:left;-webkit-tap-highlight-color:transparent;transition:border-color .2s;margin-bottom:8px;}
+.tool-btn:active{border-color:var(--accent2);}
+.ticon{font-size:1.5rem;flex-shrink:0;}.ttitle{font-size:.9rem;color:var(--snow);margin-bottom:2px;}.tdesc{font-size:.72rem;color:var(--muted);line-height:1.4;}
+.tool-sec{font-size:.68rem;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin:16px 0 8px;}
+.acct-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;}
+.acct-av{width:38px;height:38px;border-radius:50%;border:1px solid var(--border);}
 
-.entry-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:border-color 0.2s;}
-.entry-card:active{border-color:var(--accent2);background:#1f2d42;}
-.entry-num{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--accent);min-width:32px;text-align:center;line-height:1;}
-.entry-info{flex:1;min-width:0;}
-.entry-resort{font-size:0.95rem;color:var(--snow);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.entry-location{font-size:0.72rem;color:var(--accent2);margin-bottom:3px;}
-.entry-meta{font-size:0.72rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;}
-.entry-days{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;color:var(--accent2);line-height:1;text-align:right;white-space:nowrap;}
-.entry-days-label{font-size:0.68rem;color:var(--muted);text-align:right;}
+/* ── Bottom action bar (sticky) ── */
+.bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:linear-gradient(to top,var(--bg) 70%,transparent);padding:8px 16px max(env(safe-area-inset-bottom,0px),10px);display:flex;gap:8px;justify-content:center;}
+.bar-btn{flex:1;max-width:160px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);font-family:'Noto Serif TC',serif;font-size:.8rem;padding:10px 8px;cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent;transition:border-color .2s;}
+.bar-btn:active{border-color:var(--accent2);}
+.bar-btn .bi{font-size:1rem;}
+.bar-btn.share{color:var(--success);border-color:rgba(74,222,128,.25);}
 
-.empty-state{text-align:center;padding:40px 20px;color:var(--muted);font-size:0.9rem;border:1px dashed var(--border);border-radius:14px;}
-.empty-icon{font-size:2.5rem;margin-bottom:12px;}
-
-/* Modal */
-.modal-backdrop{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;}
-.modal-backdrop.open{display:flex;}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:22px 22px 0 0;padding:0 0 env(safe-area-inset-bottom,20px);width:100%;max-width:600px;transform:translateY(100%);transition:transform 0.32s cubic-bezier(.32,1,.23,1);max-height:92vh;overflow-y:auto;}
-.modal-backdrop.open .modal{transform:translateY(0);}
-.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0;}
-.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 0;}
-.modal-title{font-size:0.75rem;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;}
-.btn-modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.4rem;line-height:1;padding:4px;min-width:var(--tap);min-height:var(--tap);display:flex;align-items:center;justify-content:flex-end;}
-.modal-body{padding:16px 20px 20px;}
-.modal-actions{display:flex;gap:10px;padding:0 20px 20px;}
+/* ── Modals ── */
+.modal-bd{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;}
+.modal-bd.open{display:flex;}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:22px 22px 0 0;width:100%;max-width:var(--max);transform:translateY(100%);transition:transform .32s cubic-bezier(.32,1,.23,1);max-height:90vh;overflow-y:auto;padding-bottom:max(env(safe-area-inset-bottom,0px),16px);}
+.modal-bd.open .modal{transform:translateY(0);}
+.m-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0;}
+.m-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 0;}
+.m-title{font-size:.72rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;}
+.m-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:flex-end;}
+.m-body{padding:14px 18px 8px;}
+.m-foot{display:flex;gap:10px;padding:8px 18px 16px;}
 .btn-save{flex:1;background:linear-gradient(135deg,#0369a1,#0284c7);border:none;border-radius:12px;color:#fff;font-family:'Noto Serif TC',serif;font-size:1rem;padding:14px;cursor:pointer;min-height:var(--tap);}
-.btn-save:active{opacity:0.85;}
-.btn-save:disabled{opacity:0.5;}
-.btn-modal-delete{background:none;border:1px solid rgba(248,113,113,0.4);border-radius:12px;color:var(--danger);font-family:'Noto Serif TC',serif;font-size:0.9rem;padding:14px 18px;cursor:pointer;min-height:var(--tap);}
-.btn-modal-delete:active{background:rgba(248,113,113,0.12);}
+.btn-save:active{opacity:.85;}.btn-save:disabled{opacity:.5;}
+.btn-del{background:none;border:1px solid rgba(248,113,113,.35);border-radius:12px;color:var(--danger);font-family:'Noto Serif TC',serif;font-size:.9rem;padding:14px 16px;cursor:pointer;min-height:var(--tap);}
+.btn-del:active{background:rgba(248,113,113,.1);}
+.share-url-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:.8rem;color:var(--muted);word-break:break-all;margin:12px 0;line-height:1.5;}
+.share-url-box.ready{color:var(--accent2);border-color:rgba(56,189,248,.3);}
+
+/* ── View-only ── */
+#viewApp{display:none;}
+.view-wrap{max-width:var(--max);margin:0 auto;position:relative;z-index:1;}
+.view-top{padding:24px 20px 0;text-align:center;}
+.view-banner{background:rgba(56,189,248,.07);border:1px solid rgba(56,189,248,.18);border-radius:10px;padding:9px 14px;margin:12px 20px 0;display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--accent);}
+.view-list{padding:14px 20px 40px;}
 
 
-/* ── Share / Export bottom action bar ── */
-.action-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:linear-gradient(to top,var(--bg) 60%,transparent);padding:16px 16px env(safe-area-inset-bottom,12px);display:flex;gap:8px;justify-content:center;}
-.action-bar.view-mode{justify-content:center;}
-.btn-action{flex:1;max-width:180px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text);font-family:'Noto Serif TC',serif;font-size:0.82rem;padding:11px 8px;cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent;transition:border-color 0.2s,background 0.2s;}
-.btn-action:active{background:#1f2d42;}
-.btn-action.primary{background:linear-gradient(135deg,#0369a1,#0284c7);border-color:transparent;color:#fff;}
-.btn-action.green{background:rgba(74,222,128,0.12);border-color:rgba(74,222,128,0.3);color:var(--success);}
-.btn-action .icon{font-size:1.1rem;}
+/* ── Date range calendar ── */
+.date-range-wrap { position: relative; }
+.dr-display {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 11px 13px; min-height: var(--tap);
+  display: flex; align-items: center; gap: 10px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: border-color .2s;
+}
+.dr-display:active, .dr-display.active { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(56,189,248,.1); }
+.dr-icon { font-size: 1rem; flex-shrink: 0; }
+.dr-text { font-size: .92rem; color: var(--muted); flex: 1; }
+.dr-text.set { color: var(--snow); }
 
-/* Share modal */
-.share-modal-backdrop{display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;}
-.share-modal-backdrop.open{display:flex;}
-.share-modal{background:var(--card);border:1px solid var(--border);border-radius:22px 22px 0 0;padding:0 0 env(safe-area-inset-bottom,20px);width:100%;max-width:600px;transform:translateY(100%);transition:transform 0.32s cubic-bezier(.32,1,.23,1);}
-.share-modal-backdrop.open .share-modal{transform:translateY(0);}
-.share-modal-body{padding:20px 20px 24px;}
-.share-url-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:0.82rem;color:var(--muted);word-break:break-all;margin:14px 0;line-height:1.5;}
-.share-url-box.ready{color:var(--accent2);}
-.share-actions{display:flex;gap:8px;}
-.btn-copy{flex:1;background:linear-gradient(135deg,#0369a1,#0284c7);border:none;border-radius:12px;color:#fff;font-family:'Noto Serif TC',serif;font-size:0.95rem;padding:13px;cursor:pointer;min-height:44px;}
-.btn-copy:active{opacity:0.85;}
-.share-note{font-size:0.72rem;color:var(--muted);margin-top:10px;line-height:1.6;text-align:center;}
+/* Calendar overlay */
+.cal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 400;
+  background: rgba(0,0,0,.75); backdrop-filter: blur(6px);
+  align-items: flex-end; justify-content: center;
+}
+.cal-overlay.open { display: flex; }
+.cal-sheet {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 22px 22px 0 0;
+  width: 100%; max-width: var(--max);
+  transform: translateY(100%);
+  transition: transform .3s cubic-bezier(.32,1,.23,1);
+  padding-bottom: max(env(safe-area-inset-bottom,0px), 16px);
+}
+.cal-overlay.open .cal-sheet { transform: translateY(0); }
+.cal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 8px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; padding: 0 16px 10px; }
+.cal-title { font-size: .8rem; letter-spacing: .15em; color: var(--muted); text-transform: uppercase; }
+.cal-close { background: none; border: none; color: var(--muted); font-size: 1.3rem; cursor: pointer; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: flex-end; }
 
-/* View-only banner */
-.view-banner{background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);border-radius:12px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:0.8rem;color:var(--accent);}
-.view-banner-icon{font-size:1.2rem;}
+/* Month nav */
+.cal-nav { display: flex; align-items: center; justify-content: space-between; padding: 0 12px 8px; }
+.cal-nav-btn { background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--accent); width: 38px; height: 38px; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+.cal-nav-btn:active { background: rgba(56,189,248,.1); }
+.cal-month-label { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--snow); letter-spacing: .05em; }
 
-@media(min-width:480px){
-  .field-row{grid-template-columns:1fr 1fr;}
+/* Weekday row */
+.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 10px; margin-bottom: 4px; }
+.cal-wd { text-align: center; font-size: .65rem; color: var(--muted); padding: 4px 0; letter-spacing: .05em; }
+
+/* Days grid */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 10px 12px; gap: 2px; }
+.cal-day {
+  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  font-size: .88rem; border-radius: 50%; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; position: relative;
+  transition: background .15s, color .15s;
+  color: var(--text);
+}
+.cal-day:empty { cursor: default; }
+.cal-day.today { color: var(--accent2); font-weight: 700; }
+.cal-day.today::after { content: ''; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background: var(--accent2); border-radius: 50%; }
+.cal-day.start, .cal-day.end { background: var(--accent2) !important; color: #0a0e1a !important; font-weight: 700; border-radius: 50% !important; z-index: 1; }
+.cal-day.in-range { background: rgba(56,189,248,.15); border-radius: 0; color: var(--snow); }
+.cal-day.start.in-range { border-radius: 50% 0 0 50%; }
+.cal-day.end.in-range { border-radius: 0 50% 50% 0; }
+.cal-day.start.end { border-radius: 50% !important; }
+.cal-day:not(:empty):not(.start):not(.end):active { background: rgba(56,189,248,.25); }
+.cal-day.other-month { color: var(--muted); opacity: .4; }
+.cal-day.disabled { opacity: .25; cursor: default; pointer-events: none; }
+
+/* Selection hint */
+.cal-hint { text-align: center; font-size: .78rem; color: var(--muted); padding: 0 16px 10px; min-height: 22px; }
+.cal-hint span { color: var(--accent2); }
+
+/* Confirm bar */
+.cal-confirm { display: flex; gap: 10px; padding: 0 16px 8px; }
+.btn-cal-clear { flex: 0 0 auto; background: none; border: 1px solid var(--border); border-radius: 12px; color: var(--muted); font-family: 'Noto Serif TC', serif; font-size: .88rem; padding: 12px 16px; cursor: pointer; }
+.btn-cal-ok { flex: 1; background: linear-gradient(135deg,#0369a1,#0284c7); border: none; border-radius: 12px; color: #fff; font-family: 'Noto Serif TC', serif; font-size: 1rem; padding: 13px; cursor: pointer; min-height: var(--tap); }
+.btn-cal-ok:disabled { opacity: .4; }
+
+/* Responsive */
+@media(min-width:540px){.field-row{grid-template-columns:1fr 1fr;}}
+@media(min-width:768px){
+  .tab-btn{font-size:.8rem;padding:13px 10px 11px;}.tab-btn .ti{font-size:1.2rem;}
+  .t-days{font-size:3.4rem;}
+  .bottom-bar{max-width:var(--max);left:50%;transform:translateX(-50%);}
 }
 </style>
 </head>
@@ -259,629 +330,464 @@ input[readonly]{opacity:0.7;cursor:default;}
 
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loading-logo">❄ 雪齡</div>
-  <div class="loading-spinner"></div>
+  <div class="loading-spin"></div>
   <div class="loading-text">連接中…</div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="snow-bg" id="snowBg"></div>
+<input type="file" id="importFileInput" accept=".xls,.xlsx,.csv" style="display:none" onchange="handleImportFile(event)">
 
-<!-- Login -->
+<!-- ══ LOGIN ══ -->
 <div id="loginScreen">
   <div class="login-logo">雪 齡</div>
-  <div class="login-subtitle">SKI DAYS TRACKER</div>
+  <div class="login-sub">SKI DAYS TRACKER</div>
   <div class="login-card">
     <h2>登入以繼續</h2>
     <p>使用 Google 帳號登入<br>紀錄安全儲存在雲端</p>
     <button class="btn-google" onclick="window._fbSignIn()">
-      <svg width="20" height="20" viewBox="0 0 48 48">
-        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-      </svg>
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
       使用 Google 登入
     </button>
   </div>
 </div>
 
-
-<!-- View-only mode (no login needed) -->
-<div id="viewApp" style="display:none;">
-  <div class="container">
-    <header>
+<!-- ══ VIEW-ONLY (no login) ══ -->
+<div id="viewApp">
+  <div class="view-wrap">
+    <div class="view-top">
       <div class="logo">雪 齡</div>
-      <div class="subtitle">SKI DAYS TRACKER</div>
-    </header>
-    <div class="view-banner">
-      <span class="view-banner-icon">👁</span>
-      <span id="viewOwnerLabel">瀏覽模式・純讀取</span>
-    </div>
-    <div class="total-banner">
-      <div>
-        <div class="total-label">⛷ 累積雪齡</div>
-        <div class="total-days" id="viewTotalDays">0</div>
-        <div class="total-unit">天</div>
-      </div>
-      <div class="total-right">
-        <div class="ski-age-badge" id="viewSkiAgeBadge">尚無紀錄</div>
+      <div class="sub">SKI DAYS TRACKER</div>
+      <div class="total-banner">
+        <div><div class="t-label">⛷ 累積雪齡</div><div class="t-days" id="viewTotalDays">0</div><div class="t-unit">天</div></div>
+        <div class="t-right">
+          <div class="age-badge" id="viewAgeBadge">—</div>
+          <div class="sync-row" id="viewOwnerRow" style="font-size:.68rem;color:var(--muted);">👁 瀏覽模式</div>
+        </div>
       </div>
     </div>
-    <div class="entries-list" id="viewEntriesList"></div>
-    <!-- view mode: no export -->
+    <div class="view-banner"><span>👁</span><span>純瀏覽模式・無法編輯</span></div>
+    <div class="view-list"><div class="entries-list" id="viewEntriesList"></div></div>
   </div>
 </div>
 
-<!-- Main App -->
+<!-- ══ MAIN APP ══ -->
 <div id="mainApp">
-  <div class="container">
-    <header>
+  <div class="page-wrap">
+
+    <!-- Always-visible header: logo + total -->
+    <div class="app-top">
       <div class="logo">雪 齡</div>
-      <div class="subtitle">SKI DAYS TRACKER</div>
-    </header>
-
-    <div class="user-bar">
-      <img class="user-avatar" id="userAvatar" src="" alt="">
-      <span id="userEmail"></span>
-      <button class="btn-signout" onclick="window._fbSignOut()">登出</button>
-    </div>
-    <div class="sync-bar">
-      <div class="sync-dot syncing" id="syncDot"></div>
-      <span id="syncLabel">連接中…</span>
-    </div>
-
-    <!-- Total -->
-    <div class="total-banner">
-      <div>
-        <div class="total-label" id="totalLabel">⛷ 累積雪齡</div>
-        <div class="total-days" id="totalDays">0</div>
-        <div class="total-unit">天</div>
-      </div>
-      <div class="total-right">
-        <div class="ski-age-badge" id="skiAgeBadge">尚無紀錄</div>
-      </div>
-    </div>
-
-    <!-- Add form -->
-    <div class="form-card">
-      <div class="section-title">＋ 新增紀錄</div>
-      <div class="form-col">
-        <div class="field-row">
-          <div class="field"><label>開始日期</label><input type="date" id="inputDateStart" onchange="onDateChange()"></div>
-          <div class="field"><label>結束日期</label><input type="date" id="inputDateEnd" onchange="onDateChange()"></div>
+      <div class="sub">SKI DAYS TRACKER</div>
+      <div class="total-banner">
+        <div><div class="t-label" id="totalLabel">⛷ 累積雪齡</div><div class="t-days" id="totalDays">0</div><div class="t-unit">天</div></div>
+        <div class="t-right">
+          <div class="age-badge" id="skiAgeBadge">尚無紀錄</div>
+          <div class="sync-row"><div class="sync-dot syncing" id="syncDot"></div><span id="syncLabel">連接中…</span></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Sticky tab bar -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tab-home" onclick="switchTab('home')"><span class="ti">🏠</span><span>首頁</span></button>
+      <button class="tab-btn" id="tab-records" onclick="switchTab('records')"><span class="ti">📋</span><span>全部紀錄</span></button>
+      <button class="tab-btn" id="tab-tools" onclick="switchTab('tools')"><span class="ti">⚙️</span><span>工具</span></button>
+    </div>
+
+    <!-- ─── HOME TAB ─── -->
+    <div class="tab-pane active" id="pane-home">
+      <div class="user-bar">
+        <img class="user-avatar" id="userAvatar" src="" alt="" style="display:none;">
+        <span class="user-name" id="userEmail">—</span>
+        <button class="btn-signout" onclick="window._fbSignOut()">登出</button>
+      </div>
+
+      <!-- ADD FORM FIRST -->
+      <div class="sh">＋ 新增紀錄</div>
+      <div class="form-card">
+        <div class="form-col">
+          <div class="field">
+            <label>日期範圍</label>
+            <div class="date-range-wrap" id="drWrapI">
+              <div class="dr-display" id="drDisplayI" onclick="openCal('i')">
+                <span class="dr-icon">📅</span>
+                <span class="dr-text" id="drTextI">點擊選擇日期</span>
+              </div>
+            </div>
+          </div>
+          <input type="hidden" id="inputDateStart">
+          <input type="hidden" id="inputDateEnd">
+          <div class="field">
+            <label>雪場名稱 *</label>
+            <div class="resort-wrap">
+              <input type="text" id="inputResort" placeholder="輸入雪場名稱…" autocomplete="off" oninput="onResortInput(this.value,'i')" onfocus="onResortInput(this.value,'i')">
+              <div class="ac-list" id="acI" style="display:none"></div>
+            </div>
+          </div>
+          <div id="locChipsI" class="loc-chips" style="display:none;"></div>
+          <div class="field-row">
+            <div class="field"><label>國家</label><input type="text" id="inputCountry" placeholder="自動填入"></div>
+            <div class="field"><label>地區</label><input type="text" id="inputArea" placeholder="自動填入"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>天數 *</label><input type="number" id="inputDays" placeholder="0" min="1" max="365" inputmode="numeric"></div>
+            <div class="field"><label>備註</label><input type="text" id="inputNote" placeholder="粉雪、初學…"></div>
+          </div>
+        </div>
+        <button class="btn-add" id="btnAdd" onclick="addEntry()">加入紀錄</button>
+      </div>
+
+      <!-- RECENT RECORDS AFTER -->
+      <div class="sh">最近紀錄</div>
+      <div class="entries-list" id="recentList"></div>
+      <button class="btn-see-all" onclick="switchTab('records')">查看全部紀錄 →</button>
+    </div>
+
+    <!-- ─── RECORDS TAB ─── -->
+    <div class="tab-pane" id="pane-records">
+      <div class="rec-toolbar">
+        <div class="sh" style="margin:0;">歷年紀錄</div>
+        <div class="tb-btns">
+          <button class="btn-sm" onclick="toggleSort()"><span id="sortArrow">↓</span><span id="sortLabel"> 新到舊</span></button>
+          <button class="btn-sm danger" onclick="clearAll()">清除</button>
+        </div>
+      </div>
+      <div class="filter-card">
+        <div class="fh" onclick="toggleFilter()">
+          <div class="ft">🔍 篩選 <span class="fbadge" id="filterBadge">篩選中</span></div>
+          <span class="fchev" id="fchev">▾</span>
+        </div>
+        <div class="fbody" id="fbody">
+          <div class="fgl">國家</div><div class="fcrow" id="chipCountry"></div>
+          <div class="fgl">地區</div><div class="fcrow" id="chipArea"></div>
+          <div class="fgl">年份</div><div class="fcrow" id="chipYear"></div>
+          <div class="fbottom">
+            <div class="fres" id="filterResult"></div>
+            <button class="btn-reset" onclick="resetFilter()">清除篩選</button>
+          </div>
+        </div>
+      </div>
+      <div class="entries-list" id="entriesList"></div>
+    </div>
+
+    <!-- ─── TOOLS TAB ─── -->
+    <div class="tab-pane" id="pane-tools">
+      <div class="tool-sec">資料備份</div>
+      <button class="tool-btn" onclick="exportExcel()">
+        <span class="ticon">📊</span>
+        <div><div class="ttitle">匯出 Excel</div><div class="tdesc">下載 .xls 備份，包含所有欄位與合計天數</div></div>
+      </button>
+      <button class="tool-btn" onclick="triggerImport()">
+        <span class="ticon">📥</span>
+        <div><div class="ttitle">匯入 Excel / CSV</div><div class="tdesc">從備份檔還原，不會刪除現有資料</div></div>
+      </button>
+      <div class="tool-sec">帳號</div>
+      <div class="acct-card">
+        <img class="acct-av" id="toolsAvatar" src="" alt="" style="display:none;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.88rem;color:var(--snow);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="toolsEmail">—</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:2px;">已登入</div>
+        </div>
+        <button class="btn-sm danger" onclick="window._fbSignOut()">登出</button>
+      </div>
+    </div>
+
+  </div><!-- /page-wrap -->
+
+  <!-- ── Bottom action bar ── -->
+  <div class="bottom-bar">
+    <button class="bar-btn" onclick="exportExcel()"><span class="bi">📊</span>匯出</button>
+    <button class="bar-btn" onclick="triggerImport()"><span class="bi">📥</span>匯入</button>
+    <button class="bar-btn share" onclick="openShareModal()"><span class="bi">🔗</span>分享</button>
+  </div>
+</div><!-- /mainApp -->
+
+<!-- ══ EDIT MODAL ══ -->
+<div class="modal-bd" id="editModal" onclick="bdClick(event,'editModal',closeModal)">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-head"><div class="m-title">✏ 編輯紀錄</div><button class="m-close" onclick="closeModal()">✕</button></div>
+    <div class="m-body">
+      <div class="form-col">
+        <div class="field">
+            <label>日期範圍</label>
+            <div class="date-range-wrap" id="drWrapE">
+              <div class="dr-display" id="drDisplayE" onclick="openCal('e')">
+                <span class="dr-icon">📅</span>
+                <span class="dr-text" id="drTextE">點擊選擇日期</span>
+              </div>
+            </div>
+          </div>
+          <input type="hidden" id="editDateStart">
+          <input type="hidden" id="editDateEnd">
         <div class="field">
           <label>雪場名稱 *</label>
           <div class="resort-wrap">
-            <input type="text" id="inputResort" placeholder="輸入雪場名稱…" autocomplete="off" oninput="onResortInput(this.value,'input')" onfocus="onResortInput(this.value,'input')">
-            <div class="autocomplete-list" id="inputAutoList" style="display:none"></div>
+            <input type="text" id="editResort" placeholder="雪場名稱" autocomplete="off" oninput="onResortInput(this.value,'e')" onfocus="onResortInput(this.value,'e')">
+            <div class="ac-list" id="acE" style="display:none"></div>
           </div>
         </div>
-        <div id="inputLocationChips" class="location-chips" style="display:none"></div>
-        <div class="field-row">
-          <div class="field"><label>國家</label><input type="text" id="inputCountry" placeholder="自動填入"></div>
-          <div class="field"><label>地區</label><input type="text" id="inputArea" placeholder="自動填入"></div>
-        </div>
-        <div class="field-row">
-          <div class="field"><label>天數 *</label><input type="number" id="inputDays" placeholder="0" min="1" max="365" inputmode="numeric"></div>
-          <div class="field"><label>備註</label><input type="text" id="inputNote" placeholder="粉雪、初學…"></div>
-        </div>
-      </div>
-      <button class="btn-add" id="btnAdd" onclick="addEntry()">加入紀錄</button>
-    </div>
-
-    <!-- Filter -->
-    <div class="filter-card">
-      <div class="filter-header" onclick="toggleFilter()">
-        <div class="filter-title">🔍 篩選 <span class="filter-badge" id="filterBadge">篩選中</span></div>
-        <span class="filter-chevron" id="filterChevron">▾</span>
-      </div>
-      <div class="filter-body" id="filterBody">
-        <div class="filter-group-label">國家</div>
-        <div class="filter-chips-row" id="chipCountry"></div>
-        <div class="filter-group-label">地區</div>
-        <div class="filter-chips-row" id="chipArea"></div>
-        <div class="filter-group-label">年份</div>
-        <div class="filter-chips-row" id="chipYear"></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <div class="filter-result" id="filterResult"></div>
-          <button class="btn-reset" onclick="resetFilter()">清除篩選</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- List -->
-    <div class="entries-header">
-      <div class="entries-label">歷年紀錄</div>
-      <div class="entries-controls">
-        <button class="btn-icon" onclick="toggleSort()">
-          <span id="sortArrow">↓</span><span id="sortLabel">新到舊</span>
-        </button>
-        <button class="btn-icon btn-danger-icon" onclick="clearAll()">清除</button>
-      </div>
-    </div>
-    <div class="entries-list" id="entriesList"></div>
-
-    <!-- Action bar -->
-    <div class="action-bar" id="actionBar">
-      <button class="btn-action" onclick="exportExcel()"><span class="icon">📊</span> 匯出</button>
-      <button class="btn-action" onclick="triggerImport()"><span class="icon">📥</span> 匯入</button>
-      <button class="btn-action green" onclick="openShareModal()"><span class="icon">🔗</span> 分享</button>
-    </div>
-  </div>
-</div>
-
-
-<!-- Hidden file input for Excel import -->
-<input type="file" id="importFileInput" accept=".xls,.xlsx,.csv" style="display:none" onchange="handleImportFile(event)">
-
-<!-- Import preview modal -->
-<div class="share-modal-backdrop" id="importModal" onclick="onImportBackdrop(event)">
-  <div class="share-modal" style="max-height:85vh;">
-    <div class="modal-handle"></div>
-    <div class="share-modal-body" style="overflow-y:auto;max-height:calc(85vh - 40px);">
-      <div class="modal-header" style="padding:0;">
-        <div class="modal-title">📥 匯入 Excel</div>
-        <button class="btn-modal-close" onclick="closeImportModal()">✕</button>
-      </div>
-      <div id="importStatus" style="font-size:0.82rem;color:var(--muted);margin-top:10px;line-height:1.6;">
-        選擇從本工具匯出的 .xls 或一般 .csv 檔案
-      </div>
-      <div id="importPreview" style="margin-top:12px;display:none;">
-        <div style="font-size:0.72rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">預覽（前 5 筆）</div>
-        <div id="importPreviewList" style="display:flex;flex-direction:column;gap:6px;"></div>
-        <div id="importSummary" style="font-size:0.8rem;color:var(--accent2);margin-top:10px;text-align:center;"></div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:16px;" id="importActions">
-        <button class="btn-modal-delete" onclick="triggerImport()" style="flex:1;">重新選擇</button>
-        <button class="btn-save" id="btnImportConfirm" onclick="confirmImport()" style="display:none;">匯入全部</button>
-      </div>
-      <div style="font-size:0.7rem;color:var(--muted);margin-top:10px;line-height:1.6;text-align:center;">
-        ⚠ 匯入不會刪除現有紀錄，重複的雪場日期會一併新增
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Share modal -->
-<div class="share-modal-backdrop" id="shareModal" onclick="onShareBackdrop(event)">
-  <div class="share-modal">
-    <div class="modal-handle"></div>
-    <div class="share-modal-body">
-      <div class="modal-header" style="padding:0 0 0 0;">
-        <div class="modal-title">🔗 分享我的雪齡</div>
-        <button class="btn-modal-close" onclick="closeShareModal()">✕</button>
-      </div>
-      <p style="font-size:0.82rem;color:var(--muted);margin-top:10px;line-height:1.6;">發佈後，知道連結的人可以純瀏覽你的滑雪紀錄（無法編輯）。</p>
-      <div class="share-url-box" id="shareUrlBox">點擊下方「發佈並複製連結」來產生分享連結</div>
-      <div class="share-actions">
-        <button class="btn-copy" id="btnPublish" onclick="publishShare()">🚀 發佈並複製連結</button>
-      </div>
-      <div class="share-note" id="shareNote">每次發佈會更新為最新資料</div>
-    </div>
-  </div>
-</div>
-
-<!-- Edit Modal -->
-<div class="modal-backdrop" id="editModal" onclick="onBackdropClick(event)">
-  <div class="modal" id="modalBox">
-    <div class="modal-handle"></div>
-    <div class="modal-header">
-      <div class="modal-title">✏ 編輯紀錄</div>
-      <button class="btn-modal-close" onclick="closeModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-col">
-        <div class="field-row">
-          <div class="field"><label>開始日期</label><input type="date" id="editDateStart" onchange="onEditDateChange()"></div>
-          <div class="field"><label>結束日期</label><input type="date" id="editDateEnd" onchange="onEditDateChange()"></div>
-        </div>
-        <div class="field">
-          <label>雪場名稱 *</label>
-          <div class="resort-wrap">
-            <input type="text" id="editResort" placeholder="雪場名稱" autocomplete="off" oninput="onResortInput(this.value,'edit')" onfocus="onResortInput(this.value,'edit')">
-            <div class="autocomplete-list" id="editAutoList" style="display:none"></div>
-          </div>
-        </div>
-        <div id="editLocationChips" class="location-chips" style="display:none"></div>
+        <div id="locChipsE" class="loc-chips" style="display:none;"></div>
         <div class="field-row">
           <div class="field"><label>國家</label><input type="text" id="editCountry" placeholder="自動填入"></div>
           <div class="field"><label>地區</label><input type="text" id="editArea" placeholder="自動填入"></div>
         </div>
         <div class="field-row">
-          <div class="field"><label>天數 *</label><input type="number" id="editDays" placeholder="0" min="1" max="365" inputmode="numeric"></div>
-          <div class="field"><label>備註</label><input type="text" id="editNote" placeholder="備註"></div>
+          <div class="field"><label>天數 *</label><input type="number" id="editDays" min="1" max="365" inputmode="numeric"></div>
+          <div class="field"><label>備註</label><input type="text" id="editNote"></div>
         </div>
       </div>
     </div>
-    <div class="modal-actions">
-      <button class="btn-modal-delete" onclick="deleteFromModal()">刪除</button>
+    <div class="m-foot">
+      <button class="btn-del" onclick="deleteFromModal()">刪除</button>
       <button class="btn-save" id="btnSave" onclick="saveEdit()">儲存</button>
     </div>
   </div>
 </div>
 
+<!-- ══ SHARE MODAL ══ -->
+<div class="modal-bd" id="shareModal" onclick="bdClick(event,'shareModal',closeShareModal)">
+  <div class="modal">
+    <div class="m-handle"></div>
+    <div class="m-head"><div class="m-title">🔗 分享我的雪齡</div><button class="m-close" onclick="closeShareModal()">✕</button></div>
+    <div class="m-body">
+      <p style="font-size:.82rem;color:var(--muted);line-height:1.65;">發佈後，知道連結的人<strong style="color:var(--snow)">不需要登入</strong>，即可純瀏覽你的滑雪紀錄（無法編輯）。</p>
+      <div class="share-url-box" id="shareUrlBox">點擊下方按鈕產生分享連結</div>
+      <button class="btn-save" id="btnPublish" onclick="publishShare()" style="width:100%;">🚀 發佈並複製連結</button>
+      <p style="font-size:.7rem;color:var(--muted);margin-top:10px;text-align:center;line-height:1.5;" id="shareNote">每次發佈會同步更新為最新資料</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══ IMPORT MODAL ══ -->
+<div class="modal-bd" id="importModal" onclick="bdClick(event,'importModal',closeImportModal)">
+  <div class="modal" style="max-height:85vh;">
+    <div class="m-handle"></div>
+    <div class="m-head"><div class="m-title">📥 匯入 Excel / CSV</div><button class="m-close" onclick="closeImportModal()">✕</button></div>
+    <div class="m-body" style="overflow-y:auto;">
+      <div id="importStatus" style="font-size:.82rem;color:var(--muted);line-height:1.6;">選擇從本工具匯出的 .xls 或 .csv 檔案</div>
+      <div id="importPreview" style="margin-top:12px;display:none;">
+        <div style="font-size:.68rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">預覽（前 5 筆）</div>
+        <div id="importPreviewList"></div>
+        <div id="importSummary" style="font-size:.8rem;color:var(--accent2);margin-top:8px;text-align:center;"></div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn-del" onclick="triggerImport()">重新選擇</button>
+      <button class="btn-save" id="btnImportConfirm" onclick="confirmImport()" style="display:none;">匯入全部</button>
+    </div>
+  </div>
+</div>
+
 <script>
-// ═══════════════════════════════════════════════════════
-// 雪場資料庫
-// ═══════════════════════════════════════════════════════
-const RESORT_DB = [
-  // ── 日本・北海道 ──
-  {n:'ニセコアンヌプリ',a:['ニセコ','niseko','二世谷','Niseko Annupuri'],c:'日本',r:'北海道'},
+// ══ RESORT DB ══════════════════════════════════════════
+const RDB=[
+  {n:'ニセコアンヌプリ',a:['ニセコ','niseko','二世谷'],c:'日本',r:'北海道'},
   {n:'留壽都',a:['ルスツ','rusutsu'],c:'日本',r:'北海道'},
-  {n:'キロロ',a:['kiroro','キロロ','Kiroro'],c:'日本',r:'北海道'},
-  {n:'富良野',a:['furano','フラノ','Furano'],c:'日本',r:'北海道'},
+  {n:'キロロ',a:['kiroro'],c:'日本',r:'北海道'},
+  {n:'富良野',a:['furano','フラノ'],c:'日本',r:'北海道'},
   {n:'サッポロテイネ',a:['teine','テイネ','手稲'],c:'日本',r:'北海道'},
   {n:'札幌国際',a:['sapporo kokusai','札幌国際'],c:'日本',r:'北海道'},
-  {n:'トマム',a:['tomamu','星野リゾート トマム'],c:'日本',r:'北海道'},
+  {n:'トマム',a:['tomamu'],c:'日本',r:'北海道'},
   {n:'カムイスキーリンクス',a:['kamui','カムイ'],c:'日本',r:'北海道'},
-  {n:'ノーザンアーク',a:['northern arc'],c:'日本',r:'北海道'},
-
-  // ── 日本・長野 ──
-  {n:'白馬八方尾根',a:['happo','八方','happo-one','白馬八方'],c:'日本',r:'長野'},
+  {n:'白馬八方尾根',a:['happo','八方','白馬八方'],c:'日本',r:'長野'},
   {n:'白馬岩岳',a:['iwatake','岩岳'],c:'日本',r:'長野'},
-  {n:'白馬五竜',a:['goryu','五竜','Goryu'],c:'日本',r:'長野'},
+  {n:'白馬五竜',a:['goryu','五竜'],c:'日本',r:'長野'},
   {n:'栂池高原',a:['tsugaike','栂池'],c:'日本',r:'長野'},
   {n:'志賀高原',a:['shiga kogen','志賀'],c:'日本',r:'長野'},
-  {n:'野沢温泉',a:['nozawa','野沢','Nozawa Onsen'],c:'日本',r:'長野'},
+  {n:'野沢温泉',a:['nozawa','野沢'],c:'日本',r:'長野'},
   {n:'菅平高原',a:['sugadaira','菅平'],c:'日本',r:'長野'},
-  {n:'鹿島槍',a:['kashimayari'],c:'日本',r:'長野'},
-
-  // ── 日本・新潟 ──
   {n:'岩原',a:['iwappara','岩原スキー場'],c:'日本',r:'新潟'},
-  {n:'苗場',a:['naeba','苗場スキー場'],c:'日本',r:'新潟'},
+  {n:'苗場',a:['naeba'],c:'日本',r:'新潟'},
   {n:'かぐら',a:['kagura','神楽'],c:'日本',r:'新潟'},
-  {n:'GALA湯沢',a:['gala','GALA','ガーラ'],c:'日本',r:'新潟'},
+  {n:'GALA湯沢',a:['gala','ガーラ'],c:'日本',r:'新潟'},
   {n:'湯沢中里',a:['nakasato','中里'],c:'日本',r:'新潟'},
   {n:'石打丸山',a:['ishiuchi','石打'],c:'日本',r:'新潟'},
-  {n:'上越国際',a:['joetsu kokusai','上越国際'],c:'日本',r:'新潟'},
+  {n:'上越国際',a:['joetsu kokusai'],c:'日本',r:'新潟'},
   {n:'NASPAスキーガーデン',a:['naspa'],c:'日本',r:'新潟'},
   {n:'六日町八海山',a:['muikamachi','六日町'],c:'日本',r:'新潟'},
-
-  // ── 日本・群馬 ──
   {n:'草津国際',a:['kusatsu','草津'],c:'日本',r:'群馬'},
   {n:'尾瀬岩鞍',a:['oze iwakura','岩鞍'],c:'日本',r:'群馬'},
   {n:'万座温泉',a:['manza','万座'],c:'日本',r:'群馬'},
-  {n:'たんばらラベンダーパーク',a:['tambara'],c:'日本',r:'群馬'},
-
-  // ── 日本・栃木 ──
   {n:'那須高原',a:['nasu','那須'],c:'日本',r:'栃木'},
-
-  // ── 日本・岐阜 ──
-  {n:'白川郷',a:['shirakawago'],c:'日本',r:'岐阜'},
   {n:'高鷲スノーパーク',a:['takasu','高鷲'],c:'日本',r:'岐阜'},
   {n:'ダイナランド',a:['dynaland','ダイナ'],c:'日本',r:'岐阜'},
-
-  // ── 日本・兵庫 ──
-  {n:'ハチ高原',a:['hachi','ハチ'],c:'日本',r:'兵庫'},
-  {n:'ハチ北',a:['hachibei','ハチ北'],c:'日本',r:'兵庫'},
-
-  // ── 日本・山形 ──
   {n:'蔵王温泉',a:['zao','蔵王'],c:'日本',r:'山形'},
   {n:'月山',a:['gassan'],c:'日本',r:'山形'},
-
-  // ── 奧地利 ──
   {n:'Ischgl',a:['ischgl','伊施格爾'],c:'奧地利',r:'提洛爾'},
-  {n:'St. Anton',a:['st anton','st. anton','聖安東'],c:'奧地利',r:'提洛爾'},
-  {n:'Kitzbühel',a:['kitzbuehel','kitzbuhel','基茨比厄爾'],c:'奧地利',r:'提洛爾'},
+  {n:'St. Anton',a:['st anton','聖安東'],c:'奧地利',r:'提洛爾'},
+  {n:'Kitzbühel',a:['kitzbuehel','kitzbuhel'],c:'奧地利',r:'提洛爾'},
   {n:'Sölden',a:['solden','索爾登'],c:'奧地利',r:'提洛爾'},
-  {n:'Mayrhofen',a:['mayrhofen'],c:'奧地利',r:'提洛爾'},
-  {n:'Lech Zürs',a:['lech','lech zurs'],c:'奧地利',r:'福爾阿爾貝格'},
-  {n:'Schladming',a:['schladming'],c:'奧地利',r:'施蒂里亞'},
-
-  // ── 瑞士 ──
+  {n:'Lech Zürs',a:['lech'],c:'奧地利',r:'福爾阿爾貝格'},
   {n:'Zermatt',a:['zermatt','采爾馬特'],c:'瑞士',r:'瓦萊州'},
-  {n:'Verbier',a:['verbier','韋爾比耶'],c:'瑞士',r:'瓦萊州'},
-  {n:'St. Moritz',a:['st moritz','st. moritz','聖莫里茲'],c:'瑞士',r:'格勞賓登'},
+  {n:'Verbier',a:['verbier'],c:'瑞士',r:'瓦萊州'},
+  {n:'St. Moritz',a:['st moritz','聖莫里茲'],c:'瑞士',r:'格勞賓登'},
   {n:'Davos',a:['davos','達沃斯'],c:'瑞士',r:'格勞賓登'},
   {n:'Grindelwald',a:['grindelwald','格林德瓦'],c:'瑞士',r:'伯恩高地'},
-  {n:'Wengen',a:['wengen'],c:'瑞士',r:'伯恩高地'},
-  {n:'Saas-Fee',a:['saas fee','saas-fee'],c:'瑞士',r:'瓦萊州'},
-
-  // ── 法國 ──
-  {n:'Chamonix',a:['chamonix','夏蒙尼'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-  {n:'Méribel',a:['meribel','méribel'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-  {n:'Courchevel',a:['courchevel'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-  {n:'Val Thorens',a:['val thorens'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-  {n:'Les Arcs',a:['les arcs'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-  {n:'La Plagne',a:['la plagne'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-  {n:'Tignes',a:['tignes'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-  {n:'Val d\'Isère',a:['val disere','val d\'isere'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-  {n:'Alpe d\'Huez',a:['alpe dhuez','alpe d\'huez'],c:'法國',r:'奧弗涅-羅納-阿爾卑斯'},
-
-  // ── 義大利 ──
-  {n:'Cortina d\'Ampezzo',a:['cortina','科爾蒂納'],c:'義大利',r:'威尼托'},
-  {n:'Sestriere',a:['sestriere'],c:'義大利',r:'皮埃蒙特'},
-  {n:'Madonna di Campiglio',a:['madonna','campiglio'],c:'義大利',r:'特倫托'},
+  {n:'Chamonix',a:['chamonix','夏蒙尼'],c:'法國',r:'阿爾卑斯'},
+  {n:'Méribel',a:['meribel'],c:'法國',r:'阿爾卑斯'},
+  {n:'Courchevel',a:['courchevel'],c:'法國',r:'阿爾卑斯'},
+  {n:'Val Thorens',a:['val thorens'],c:'法國',r:'阿爾卑斯'},
+  {n:'Tignes',a:['tignes'],c:'法國',r:'阿爾卑斯'},
+  {n:"Val d'Isère",a:['val disere','val d isere'],c:'法國',r:'阿爾卑斯'},
+  {n:"Cortina d'Ampezzo",a:['cortina','科爾蒂納'],c:'義大利',r:'威尼托'},
   {n:'Livigno',a:['livigno'],c:'義大利',r:'倫巴第'},
-
-  // ── 加拿大 ──
   {n:'Whistler Blackcomb',a:['whistler','惠斯勒'],c:'加拿大',r:'不列顛哥倫比亞'},
-  {n:'Banff Sunshine',a:['banff sunshine','sunshine village'],c:'加拿大',r:'亞伯達'},
+  {n:'Banff Sunshine',a:['banff','sunshine'],c:'加拿大',r:'亞伯達'},
   {n:'Lake Louise',a:['lake louise','露易絲湖'],c:'加拿大',r:'亞伯達'},
-  {n:'Mont-Tremblant',a:['tremblant','mont tremblant'],c:'加拿大',r:'魁北克'},
-  {n:'Big White',a:['big white'],c:'加拿大',r:'不列顛哥倫比亞'},
-  {n:'Silver Star',a:['silver star'],c:'加拿大',r:'不列顛哥倫比亞'},
-
-  // ── 美國 ──
-  {n:'Vail',a:['vail','韋爾'],c:'美國',r:'科羅拉多'},
+  {n:'Vail',a:['vail'],c:'美國',r:'科羅拉多'},
   {n:'Aspen',a:['aspen','阿斯彭'],c:'美國',r:'科羅拉多'},
   {n:'Breckenridge',a:['breckenridge'],c:'美國',r:'科羅拉多'},
-  {n:'Steamboat',a:['steamboat'],c:'美國',r:'科羅拉多'},
   {n:'Park City',a:['park city'],c:'美國',r:'猶他'},
-  {n:'Deer Valley',a:['deer valley'],c:'美國',r:'猶他'},
-  {n:'Alta',a:['alta'],c:'美國',r:'猶他'},
-  {n:'Snowbird',a:['snowbird'],c:'美國',r:'猶他'},
   {n:'Jackson Hole',a:['jackson hole','傑克遜'],c:'美國',r:'懷俄明'},
   {n:'Mammoth Mountain',a:['mammoth','猛獁'],c:'美國',r:'加利福尼亞'},
-  {n:'Lake Tahoe',a:['tahoe','太浩湖'],c:'美國',r:'加利福尼亞'},
-
-  // ── 韓國 ──
-  {n:'龍平',a:['yongpyong','용평','龍平'],c:'韓國',r:'江原道'},
-  {n:'鳳凰城',a:['phoenix park','phoenix','鳳凰','봉황'],c:'韓國',r:'江原道'},
+  {n:'龍平',a:['yongpyong','용평'],c:'韓國',r:'江原道'},
+  {n:'鳳凰城',a:['phoenix park','phoenix','봉황'],c:'韓國',r:'江原道'},
   {n:'High1',a:['high1','하이원'],c:'韓國',r:'江原道'},
-  {n:'維瓦爾第',a:['vivaldi','비발디','Vivaldi Park'],c:'韓國',r:'江原道'},
-  {n:'Bears Town',a:['bears town','베어스타운'],c:'韓國',r:'京畿道'},
-
-  // ── 紐西蘭 ──
+  {n:'維瓦爾第',a:['vivaldi','비발디'],c:'韓國',r:'江原道'},
   {n:'Coronet Peak',a:['coronet peak','coronet'],c:'紐西蘭',r:'皇后鎮'},
   {n:'The Remarkables',a:['remarkables'],c:'紐西蘭',r:'皇后鎮'},
   {n:'Cardrona',a:['cardrona'],c:'紐西蘭',r:'中奧塔哥'},
-  {n:'Mt Hutt',a:['mt hutt','mt. hutt'],c:'紐西蘭',r:'坎特伯雷'},
+  {n:'Mt Hutt',a:['mt hutt'],c:'紐西蘭',r:'坎特伯雷'},
 ];
 
-// 搜尋函式：支援中日英文模糊比對
-function searchResort(q) {
-  if (!q || q.length < 1) return [];
-  const lq = q.toLowerCase().replace(/\s+/g,'');
-  const scored = RESORT_DB.map(r => {
-    const names = [r.n, ...r.a].map(s => s.toLowerCase().replace(/\s+/g,''));
-    let score = 0;
-    for (const nm of names) {
-      if (nm === lq) { score = 100; break; }
-      if (nm.startsWith(lq)) { score = Math.max(score, 80); }
-      else if (nm.includes(lq)) { score = Math.max(score, 60); }
-      else if (lq.length >= 2) {
-        // character-by-character partial (for CJK)
-        let matched = 0;
-        for (const ch of lq) { if (nm.includes(ch)) matched++; }
-        if (matched / lq.length > 0.5) score = Math.max(score, 30 + matched * 5);
-      }
+function searchResort(q){
+  if(!q)return[];
+  const lq=q.toLowerCase().replace(/\s+/g,'');
+  return RDB.map(r=>{
+    const names=[r.n,...r.a].map(s=>s.toLowerCase().replace(/\s+/g,''));
+    let sc=0;
+    for(const nm of names){
+      if(nm===lq){sc=100;break;}
+      if(nm.startsWith(lq))sc=Math.max(sc,80);
+      else if(nm.includes(lq))sc=Math.max(sc,60);
+      else if(lq.length>=2){let m=0;for(const ch of lq)if(nm.includes(ch))m++;if(m/lq.length>.5)sc=Math.max(sc,25+m*5);}
     }
-    return { resort: r, score };
-  }).filter(x => x.score > 0).sort((a,b) => b.score - a.score);
-  return scored.slice(0, 6).map(x => x.resort);
+    return{r,sc};
+  }).filter(x=>x.sc>0).sort((a,b)=>b.sc-a.sc).slice(0,6).map(x=>x.r);
 }
 
-// ─────────────────────────────────────────────────────
 // Snow particles
-const snowBg = document.getElementById('snowBg');
-for (let i = 0; i < 36; i++) {
-  const f = document.createElement('div'); f.className = 'flake';
-  f.textContent = ['❄','❅','❆','✦','·'][Math.floor(Math.random()*5)];
-  f.style.left = Math.random()*100+'vw';
-  f.style.fontSize = (0.5+Math.random()*1.1)+'rem';
-  f.style.animationDuration = (7+Math.random()*13)+'s';
-  f.style.animationDelay = '-'+(Math.random()*15)+'s';
-  f.style.opacity = 0.1+Math.random()*0.35;
-  snowBg.appendChild(f);
-}
+{const bg=document.getElementById('snowBg');for(let i=0;i<32;i++){const f=document.createElement('div');f.className='flake';f.textContent=['❄','❅','❆','✦','·'][i%5];f.style.cssText=`left:${Math.random()*100}vw;font-size:${.5+Math.random()}rem;animation-duration:${7+Math.random()*13}s;animation-delay:-${Math.random()*15}s;opacity:${.07+Math.random()*.28}`;bg.appendChild(f);}}
 
 // State
-window.entries = [];
-let sortOrder = 'desc';
-let editingId = null;
-let filterOpen = false;
-let activeFilters = { country:'', area:'', year:'' };
+window.entries=[];
+let sortOrder='desc',editingId=null,filterOpen=false,importParsed=[];
+let AF={country:'',area:'',year:''};
 
-// ── UI helpers ────────────────────────────────────────
-function hideLoading() {
-  const el = document.getElementById('loadingOverlay');
-  if (!el) return; el.classList.add('hidden'); setTimeout(()=>el.remove(),600);
-}
-function setSyncStatus(s,l){ const d=document.getElementById('syncDot'),lb=document.getElementById('syncLabel'); if(d)d.className='sync-dot '+s; if(lb)lb.textContent=l; }
-function showToast(msg,dur=2600){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),dur); }
-function getSkiAgeLabel(d){ if(d===0)return'尚無紀錄'; if(d<10)return'🐣 初學者'; if(d<30)return'🎿 入門滑手'; if(d<60)return'⛷ 熟練滑手'; if(d<100)return'🏔 進階好手'; if(d<200)return'🥇 資深雪客'; return'🦅 雪場傳說'; }
-function formatDateRange(e){ if(e.dateStart&&e.dateEnd)return e.dateStart+' ～ '+e.dateEnd; if(e.dateStart)return e.dateStart; if(e.dateEnd)return e.dateEnd; if(e.date)return e.date; return e.year?e.year+' 年':'—'; }
-function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Helpers
+function hideLoading(){const el=document.getElementById('loadingOverlay');if(!el)return;el.classList.add('hidden');setTimeout(()=>el.remove(),600);}
+function setSyncStatus(s,l){const d=document.getElementById('syncDot'),lb=document.getElementById('syncLabel');if(d)d.className='sync-dot '+s;if(lb)lb.textContent=l;}
+function showToast(msg,dur=2600){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+function getAgeLabel(d){if(!d)return'尚無紀錄';if(d<10)return'🐣 初學者';if(d<30)return'🎿 入門滑手';if(d<60)return'⛷ 熟練滑手';if(d<100)return'🏔 進階好手';if(d<200)return'🥇 資深雪客';return'🦅 雪場傳說';}
+function fmtDate(e){if(e.dateStart&&e.dateEnd)return e.dateStart+' ～ '+e.dateEnd;if(e.dateStart)return e.dateStart;if(e.dateEnd)return e.dateEnd;if(e.date)return e.date;return e.year?e.year+' 年':'—';}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function bdClick(ev,id,fn){if(ev.target===document.getElementById(id))fn();}
 
-// ── Autocomplete ──────────────────────────────────────
-let autoTimeout = null;
-function onResortInput(val, ctx) {
-  clearTimeout(autoTimeout);
-  autoTimeout = setTimeout(() => showAutoList(val, ctx), 80);
-}
-
-function showAutoList(val, ctx) {
-  const listId = ctx==='input' ? 'inputAutoList' : 'editAutoList';
-  const list = document.getElementById(listId);
-  const results = searchResort(val);
-
-  if (results.length === 0) { list.style.display='none'; return; }
-
-  list.innerHTML = results.map((r,i) => `
-    <div class="autocomplete-item" ontouchstart="" onclick="selectResort(${JSON.stringify(r).replace(/"/g,'&quot;')},'${ctx}')">
-      <div class="autocomplete-name">${escHtml(r.n)}</div>
-      <div class="autocomplete-meta">${escHtml(r.c)} · ${escHtml(r.r)}</div>
+function cardHtml(e,num,editable=true){
+  return`<div class="entry-card${editable?'':' ro'}" ${editable?`onclick="openEdit('${e.id}')"`:''}>
+    <div class="en">${num}</div>
+    <div class="ei">
+      <div class="er">${esc(e.resort)}</div>
+      ${(e.country||e.area)?`<div class="el">📍 ${[e.country,e.area].filter(Boolean).join(' · ')}</div>`:''}
+      <div class="em"><span>📅 ${fmtDate(e)}</span>${e.note?`<span>💬 ${esc(e.note)}</span>`:''}</div>
     </div>
-  `).join('') + `
-    <div class="autocomplete-item" onclick="closeAutoList('${ctx}')">
-      <div class="autocomplete-manual">✎ 直接使用「${escHtml(val)}」</div>
-    </div>`;
-  list.style.display = 'block';
+    <div class="ed-col"><div class="ed">${e.days}</div><div class="edl">天</div></div>
+  </div>`;
 }
 
-function selectResort(r, ctx) {
-  const pre = ctx==='input' ? 'input' : 'edit';
-  document.getElementById(pre+'Resort').value = r.n;
-  document.getElementById(pre+'Country').value = r.c;
-  document.getElementById(pre+'Area').value = r.r;
-  showLocationChips(r.c, r.r, pre);
-  closeAutoList(ctx);
+// Tabs
+function switchTab(t){['home','records','tools'].forEach(x=>{document.getElementById('tab-'+x).classList.toggle('active',x===t);document.getElementById('pane-'+x).classList.toggle('active',x===t);});}
+
+// Data
+function onDataUpdate(){
+  const total=window.entries.reduce((s,e)=>s+(e.days||0),0);
+  document.getElementById('totalDays').textContent=total;
+  document.getElementById('skiAgeBadge').textContent=getAgeLabel(total);
+  document.getElementById('totalLabel').textContent=Object.values(AF).some(v=>v)?`⛷ 篩選：${getFiltered().reduce((s,e)=>s+(e.days||0),0)} 天`:'⛷ 累積雪齡';
+  renderHome();renderRecords();updateFilterOpts();
 }
 
-function closeAutoList(ctx) {
-  const id = ctx==='input' ? 'inputAutoList' : 'editAutoList';
-  document.getElementById(id).style.display='none';
+function sortedAll(){return[...window.entries].sort((a,b)=>(b.dateStart||b.date||String(b.year||0)).localeCompare(a.dateStart||a.date||String(a.year||0)));}
+
+function renderHome(){
+  const all=sortedAll();
+  const curYear=new Date().getFullYear();
+  let show=all.filter(e=>e.year===curYear);
+  if(!show.length)show=all.slice(0,3);
+  const list=document.getElementById('recentList');
+  if(!show.length){list.innerHTML='<div class="empty"><div class="empty-i">🏔</div>還沒有任何紀錄<br>從上方表單新增第一筆吧！</div>';return;}
+  list.innerHTML=show.map(e=>cardHtml(e,all.length-all.indexOf(e))).join('');
 }
 
-function showLocationChips(country, area, pre) {
-  const wrap = document.getElementById(pre+'LocationChips');
-  if (!country && !area) { wrap.style.display='none'; return; }
-  wrap.style.display='flex';
-  wrap.innerHTML = [country,area].filter(Boolean).map(v=>`<span class="chip">${escHtml(v)}</span>`).join('');
+function getFiltered(){return window.entries.filter(e=>{if(AF.country&&(e.country||'')!==AF.country)return false;if(AF.area&&(e.area||'')!==AF.area)return false;if(AF.year&&String(e.year||'')!==AF.year)return false;return true;});}
+
+function renderRecords(){
+  const filtered=getFiltered();
+  const hasF=Object.values(AF).some(v=>v!=='');
+  const ftotal=filtered.reduce((s,e)=>s+(e.days||0),0);
+  document.getElementById('filterResult').textContent=hasF?`共 ${filtered.length} 筆・合計 ${ftotal} 天`:'';
+  const sorted=[...filtered].sort((a,b)=>{const dir=sortOrder==='desc'?-1:1;return dir*(a.dateStart||a.date||String(a.year||0)).localeCompare(b.dateStart||b.date||String(b.year||0));});
+  const list=document.getElementById('entriesList');
+  if(!sorted.length){list.innerHTML=`<div class="empty"><div class="empty-i">${hasF?'🔍':'🏔'}</div>${hasF?'沒有符合篩選條件的紀錄':'還沒有任何紀錄'}</div>`;return;}
+  list.innerHTML=sorted.map((e,i)=>cardHtml(e,sortOrder==='desc'?sorted.length-i:i+1)).join('');
 }
 
-// Close autocomplete when tapping outside
-document.addEventListener('click', e => {
-  if (!e.target.closest('.resort-wrap')) {
-    document.getElementById('inputAutoList').style.display='none';
-    document.getElementById('editAutoList').style.display='none';
-  }
-});
-
-// ── Filter ────────────────────────────────────────────
-function toggleFilter() {
-  filterOpen = !filterOpen;
-  document.getElementById('filterBody').classList.toggle('open', filterOpen);
-  document.getElementById('filterChevron').classList.toggle('open', filterOpen);
+function updateFilterOpts(){
+  const countries=[...new Set(window.entries.map(e=>e.country).filter(Boolean))].sort();
+  const areas=[...new Set(window.entries.map(e=>e.area).filter(Boolean))].sort();
+  const years=[...new Set(window.entries.map(e=>e.year).filter(Boolean))].sort((a,b)=>b-a);
+  function chips(id,items,key){const el=document.getElementById(id);if(!items.length){el.innerHTML='<span style="font-size:.72rem;color:var(--muted)">—</span>';return;}el.innerHTML=items.map(v=>`<button class="fc ${String(AF[key])===String(v)?'active':''}" onclick="setFilter('${key}','${v}')">${esc(v)}</button>`).join('');}
+  chips('chipCountry',countries,'country');chips('chipArea',areas,'area');chips('chipYear',years,'year');
 }
+function toggleFilter(){filterOpen=!filterOpen;document.getElementById('fbody').classList.toggle('open',filterOpen);document.getElementById('fchev').classList.toggle('open',filterOpen);}
+function setFilter(key,val){AF[key]=AF[key]===String(val)?'':String(val);const has=Object.values(AF).some(v=>v!=='');document.getElementById('filterBadge').classList.toggle('on',has);updateFilterOpts();renderRecords();onDataUpdate();}
+function resetFilter(){AF={country:'',area:'',year:''};document.getElementById('filterBadge').classList.remove('on');updateFilterOpts();renderRecords();onDataUpdate();}
+function toggleSort(){sortOrder=sortOrder==='desc'?'asc':'desc';document.getElementById('sortLabel').textContent=sortOrder==='desc'?' 新到舊':' 舊到新';document.getElementById('sortArrow').textContent=sortOrder==='desc'?'↓':'↑';renderRecords();}
 
-function updateFilterOptions() {
-  const countries = [...new Set(window.entries.map(e=>e.country).filter(Boolean))].sort();
-  const areas     = [...new Set(window.entries.map(e=>e.area).filter(Boolean))].sort();
-  const years     = [...new Set(window.entries.map(e=>e.year).filter(Boolean))].sort((a,b)=>b-a);
-
-  function renderChips(containerId, items, filterKey) {
-    const el = document.getElementById(containerId);
-    if (items.length === 0) { el.innerHTML='<span style="font-size:0.75rem;color:var(--muted)">—</span>'; return; }
-    el.innerHTML = items.map(v => `
-      <button class="filter-chip ${String(activeFilters[filterKey])===String(v)?'active':''}" onclick="setFilter('${filterKey}','${v}')">
-        ${escHtml(v)}
-      </button>`).join('');
-  }
-  renderChips('chipCountry', countries, 'country');
-  renderChips('chipArea', areas, 'area');
-  renderChips('chipYear', years, 'year');
+// Autocomplete
+let autoT=null;
+function onResortInput(val,ctx){clearTimeout(autoT);autoT=setTimeout(()=>showAC(val,ctx),80);}
+function showAC(val,ctx){
+  const id=ctx==='i'?'acI':'acE',list=document.getElementById(id),res=searchResort(val);
+  if(!res.length){list.style.display='none';return;}
+  list.innerHTML=res.map(r=>`<div class="ac-item" ontouchstart="" onclick="pickResort(${JSON.stringify(r).replace(/"/g,'&quot;')},'${ctx}')"><div class="ac-name">${esc(r.n)}</div><div class="ac-meta">${esc(r.c)} · ${esc(r.r)}</div></div>`).join('')
+    +`<div class="ac-item" onclick="closeAC('${ctx}')"><div class="ac-manual">✎ 直接使用「${esc(val)}」</div></div>`;
+  list.style.display='block';
 }
-
-function setFilter(key, val) {
-  activeFilters[key] = activeFilters[key]===String(val) ? '' : String(val);
-  const hasFilter = Object.values(activeFilters).some(v=>v!=='');
-  document.getElementById('filterBadge').classList.toggle('on', hasFilter);
-  updateFilterOptions();
-  render();
+function pickResort(r,ctx){
+  const p=ctx==='i'?'input':'edit';
+  document.getElementById(p+'Resort').value=r.n;
+  document.getElementById(p+'Country').value=r.c;
+  document.getElementById(p+'Area').value=r.r;
+  const w=document.getElementById('locChips'+(ctx==='i'?'I':'E'));
+  w.style.display='flex';w.innerHTML=[r.c,r.r].map(v=>`<span class="chip">${esc(v)}</span>`).join('');
+  closeAC(ctx);
 }
+function closeAC(ctx){document.getElementById(ctx==='i'?'acI':'acE').style.display='none';}
+document.addEventListener('click',ev=>{if(!ev.target.closest('.resort-wrap')){closeAC('i');closeAC('e');}});
 
-function resetFilter() {
-  activeFilters = { country:'', area:'', year:'' };
-  document.getElementById('filterBadge').classList.remove('on');
-  updateFilterOptions(); render();
-}
+// Date calc
+// onDateChange handled by calendar
+// onEditDateChange handled by calendar
 
-function getFiltered() {
-  return window.entries.filter(e => {
-    if (activeFilters.country && (e.country||'') !== activeFilters.country) return false;
-    if (activeFilters.area    && (e.area||'')    !== activeFilters.area)    return false;
-    if (activeFilters.year    && String(e.year||'') !== activeFilters.year) return false;
-    return true;
-  });
-}
-
-// ── Render ────────────────────────────────────────────
-function render() {
-  const filtered = getFiltered();
-  const hasFilter = Object.values(activeFilters).some(v=>v!=='');
-  const total = filtered.reduce((s,e)=>s+(e.days||0),0);
-
-  document.getElementById('totalDays').textContent = total;
-  document.getElementById('skiAgeBadge').textContent = getSkiAgeLabel(total);
-  document.getElementById('totalLabel').textContent = hasFilter ? '⛷ 篩選雪齡' : '⛷ 累積雪齡';
-  document.getElementById('filterResult').textContent = hasFilter ? `共 ${filtered.length} 筆・合計 ${total} 天` : '';
-
-  const list = document.getElementById('entriesList');
-  if (filtered.length === 0) {
-    list.innerHTML=`<div class="empty-state"><div class="empty-icon">${hasFilter?'🔍':'🏔'}</div>${hasFilter?'沒有符合篩選的紀錄':'還沒有任何紀錄<br>新增你的第一筆滑雪紀錄吧！'}</div>`;
-    return;
-  }
-
-  const sorted = [...filtered].sort((a,b)=>{
-    const dir = sortOrder==='desc'?-1:1;
-    const ak = a.dateStart||a.date||String(a.year||0);
-    const bk = b.dateStart||b.date||String(b.year||0);
-    return dir*ak.localeCompare(bk);
-  });
-
-  list.innerHTML = sorted.map((e,i)=>`
-    <div class="entry-card" onclick="openEdit('${e.id}')">
-      <div class="entry-num">${sortOrder==='desc'?sorted.length-i:i+1}</div>
-      <div class="entry-info">
-        <div class="entry-resort">${escHtml(e.resort||'')}</div>
-        ${(e.country||e.area)?`<div class="entry-location">📍 ${[e.country,e.area].filter(Boolean).join(' · ')}</div>`:''}
-        <div class="entry-meta">
-          <span>📅 ${formatDateRange(e)}</span>
-          ${e.note?`<span>💬 ${escHtml(e.note)}</span>`:''}
-        </div>
-      </div>
-      <div>
-        <div class="entry-days">${e.days}</div>
-        <div class="entry-days-label">天</div>
-      </div>
-    </div>
-  `).join('');
-}
-
-// ── Sort ──────────────────────────────────────────────
-function toggleSort() {
-  sortOrder = sortOrder==='desc'?'asc':'desc';
-  document.getElementById('sortLabel').textContent = sortOrder==='desc'?'新到舊':'舊到新';
-  document.getElementById('sortArrow').textContent = sortOrder==='desc'?'↓':'↑';
-  render();
-}
-
-// ── Date calc ─────────────────────────────────────────
-function onDateChange() {
-  const s=document.getElementById('inputDateStart').value, e=document.getElementById('inputDateEnd').value;
-  if(s&&e&&e>=s) document.getElementById('inputDays').value=Math.round((new Date(e)-new Date(s))/86400000)+1;
-}
-function onEditDateChange() {
-  const s=document.getElementById('editDateStart').value, e=document.getElementById('editDateEnd').value;
-  if(s&&e&&e>=s) document.getElementById('editDays').value=Math.round((new Date(e)-new Date(s))/86400000)+1;
-}
-
-// ── Add ───────────────────────────────────────────────
-async function addEntry() {
-  const dateStart=document.getElementById('inputDateStart').value;
-  const dateEnd=document.getElementById('inputDateEnd').value;
-  const resort=document.getElementById('inputResort').value.trim();
-  const country=document.getElementById('inputCountry').value.trim();
-  const area=document.getElementById('inputArea').value.trim();
-  const days=parseInt(document.getElementById('inputDays').value);
-  const note=document.getElementById('inputNote').value.trim();
-
+// Add
+async function addEntry(){
+  const dateStart=document.getElementById('inputDateStart').value,dateEnd=document.getElementById('inputDateEnd').value,resort=document.getElementById('inputResort').value.trim(),country=document.getElementById('inputCountry').value.trim(),area=document.getElementById('inputArea').value.trim(),days=parseInt(document.getElementById('inputDays').value),note=document.getElementById('inputNote').value.trim();
   let year;
-  if(dateStart) year=parseInt(dateStart.slice(0,4));
-  else if(dateEnd) year=parseInt(dateEnd.slice(0,4));
-  else { showToast('⚠ 請至少填寫開始日期'); return; }
+  if(dateStart)year=parseInt(dateStart.slice(0,4));else if(dateEnd)year=parseInt(dateEnd.slice(0,4));else{showToast('⚠ 請至少填寫開始日期');return;}
   if(dateEnd&&dateStart&&dateEnd<dateStart){showToast('⚠ 結束日期不能早於開始日期');return;}
   if(!resort){showToast('⚠ 請輸入雪場名稱');return;}
   if(!days||days<1){showToast('⚠ 請輸入天數（至少 1 天）');return;}
-
-  const btn=document.getElementById('btnAdd');
-  btn.disabled=true; btn.textContent='儲存中…';
-  setSyncStatus('syncing','儲存中…');
-  try {
-    await window._fbAdd({year,dateStart,dateEnd,resort,country,area,days,note});
-    showToast('✓ '+resort+' '+days+' 天');
-    ['inputDateStart','inputDateEnd','inputResort','inputCountry','inputArea','inputDays','inputNote'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('inputLocationChips').style.display='none';
-    document.getElementById('inputAutoList').style.display='none';
-  } catch(err){showToast('⚠ 儲存失敗：'+err.message);setSyncStatus('error','儲存失敗');}
-  btn.disabled=false; btn.textContent='加入紀錄';
+  const btn=document.getElementById('btnAdd');btn.disabled=true;btn.textContent='儲存中…';setSyncStatus('syncing','儲存中…');
+  try{await window._fbAdd({year,dateStart,dateEnd,resort,country,area,days,note});showToast('✓ '+resort+' '+days+' 天');['inputDateStart','inputDateEnd','inputResort','inputCountry','inputArea','inputDays','inputNote'].forEach(id=>document.getElementById(id).value='');document.getElementById('locChipsI').style.display='none';closeAC('i');setCalDisplay('i','','');}
+  catch(err){showToast('⚠ 儲存失敗：'+err.message);setSyncStatus('error','儲存失敗');}
+  btn.disabled=false;btn.textContent='加入紀錄';
 }
 
-// ── Edit modal ────────────────────────────────────────
-function openEdit(id) {
-  const e=window.entries.find(x=>x.id===id); if(!e)return;
+// Edit
+function openEdit(id){
+  const e=window.entries.find(x=>x.id===id);if(!e)return;
   editingId=id;
   document.getElementById('editDateStart').value=e.dateStart||e.date||'';
   document.getElementById('editDateEnd').value=e.dateEnd||'';
@@ -890,425 +796,203 @@ function openEdit(id) {
   document.getElementById('editArea').value=e.area||'';
   document.getElementById('editDays').value=e.days||'';
   document.getElementById('editNote').value=e.note||'';
-  showLocationChips(e.country||'',e.area||'','edit');
-  document.getElementById('editModal').classList.add('open');
-  document.body.style.overflow='hidden';
+  setCalDisplay('e', e.dateStart||e.date||'', e.dateEnd||'');
+  const ch=document.getElementById('locChipsE');
+  if(e.country||e.area){ch.style.display='flex';ch.innerHTML=[e.country,e.area].filter(Boolean).map(v=>`<span class="chip">${esc(v)}</span>`).join('');}else ch.style.display='none';
+  document.getElementById('editModal').classList.add('open');document.body.style.overflow='hidden';
 }
-function closeModal() {
-  document.getElementById('editModal').classList.remove('open');
-  document.getElementById('editAutoList').style.display='none';
-  document.body.style.overflow=''; editingId=null;
-}
-function onBackdropClick(ev){ if(ev.target===document.getElementById('editModal'))closeModal(); }
-
-async function saveEdit() {
+function closeModal(){document.getElementById('editModal').classList.remove('open');closeAC('e');document.body.style.overflow='';editingId=null;setCalDisplay('e','','');}
+async function saveEdit(){
   if(!editingId)return;
-  const dateStart=document.getElementById('editDateStart').value;
-  const dateEnd=document.getElementById('editDateEnd').value;
-  const resort=document.getElementById('editResort').value.trim();
-  const country=document.getElementById('editCountry').value.trim();
-  const area=document.getElementById('editArea').value.trim();
-  const days=parseInt(document.getElementById('editDays').value);
-  const note=document.getElementById('editNote').value.trim();
-
-  let year;
-  if(dateStart)year=parseInt(dateStart.slice(0,4));
-  else if(dateEnd)year=parseInt(dateEnd.slice(0,4));
-  else{showToast('⚠ 請至少填寫開始日期');return;}
-  if(dateEnd&&dateStart&&dateEnd<dateStart){showToast('⚠ 結束日期不能早於開始日期');return;}
-  if(!resort){showToast('⚠ 請輸入雪場名稱');return;}
-  if(!days||days<1){showToast('⚠ 請輸入天數（至少 1 天）');return;}
-
-  const btn=document.getElementById('btnSave');
-  btn.disabled=true; btn.textContent='儲存中…';
-  setSyncStatus('syncing','儲存中…');
+  const dateStart=document.getElementById('editDateStart').value,dateEnd=document.getElementById('editDateEnd').value,resort=document.getElementById('editResort').value.trim(),country=document.getElementById('editCountry').value.trim(),area=document.getElementById('editArea').value.trim(),days=parseInt(document.getElementById('editDays').value),note=document.getElementById('editNote').value.trim();
+  let year;if(dateStart)year=parseInt(dateStart.slice(0,4));else if(dateEnd)year=parseInt(dateEnd.slice(0,4));else{showToast('⚠ 請至少填寫開始日期');return;}
+  if(!resort){showToast('⚠ 請輸入雪場名稱');return;}if(!days||days<1){showToast('⚠ 請輸入天數');return;}
+  const btn=document.getElementById('btnSave');btn.disabled=true;btn.textContent='儲存中…';
   try{await window._fbUpdate(editingId,{year,dateStart,dateEnd,resort,country,area,days,note});showToast('✓ 已更新');closeModal();}
-  catch(err){showToast('⚠ 更新失敗：'+err.message);setSyncStatus('error','更新失敗');}
-  btn.disabled=false; btn.textContent='儲存';
+  catch(err){showToast('⚠ 更新失敗：'+err.message);}
+  btn.disabled=false;btn.textContent='儲存';
+}
+async function deleteFromModal(){if(!editingId)return;if(!confirm('確定要刪除這筆紀錄？'))return;try{await window._fbDelete(editingId);showToast('已刪除紀錄');closeModal();}catch(e){showToast('⚠ 刪除失敗：'+e.message);}}
+async function clearAll(){if(!confirm('確定要清除所有紀錄？'))return;try{await window._fbClearAll();showToast('已清除所有紀錄');}catch(e){showToast('⚠ 清除失敗：'+e.message);}}
+
+// Share
+function openShareModal(){document.getElementById('shareUrlBox').className='share-url-box';document.getElementById('shareUrlBox').textContent='點擊下方按鈕產生分享連結';document.getElementById('btnPublish').textContent='🚀 發佈並複製連結';document.getElementById('shareNote').textContent='每次發佈會同步更新為最新資料';document.getElementById('shareModal').classList.add('open');document.body.style.overflow='hidden';}
+function closeShareModal(){document.getElementById('shareModal').classList.remove('open');document.body.style.overflow='';}
+async function publishShare(){
+  const btn=document.getElementById('btnPublish');btn.textContent='發佈中…';btn.disabled=true;
+  try{await window._fbPublishShare();const uid=window._fbCurrentUid();const url=location.origin+location.pathname+'?view='+uid;document.getElementById('shareUrlBox').textContent=url;document.getElementById('shareUrlBox').className='share-url-box ready';await navigator.clipboard.writeText(url).catch(()=>{});btn.textContent='✓ 連結已複製！';document.getElementById('shareNote').textContent='已複製到剪貼簿，傳給朋友即可瀏覽 🎿';showToast('✓ 分享連結已複製');}
+  catch(e){showToast('⚠ 發佈失敗：'+e.message);btn.textContent='🚀 發佈並複製連結';}
+  btn.disabled=false;
 }
 
-async function deleteFromModal() {
-  if(!editingId)return;
-  if(!confirm('確定要刪除這筆紀錄？'))return;
-  setSyncStatus('syncing','刪除中…');
-  try{await window._fbDelete(editingId);showToast('已刪除紀錄');closeModal();}
-  catch(err){showToast('⚠ 刪除失敗：'+err.message);}
+// Excel export
+function exportExcel(){
+  const data=window.entries;if(!data.length){showToast('⚠ 沒有資料可以匯出');return;}
+  const sorted=[...data].sort((a,b)=>(b.dateStart||b.date||String(b.year||0)).localeCompare(a.dateStart||a.date||String(a.year||0)));
+  const total=sorted.reduce((s,e)=>s+(e.days||0),0);
+  const x=v=>String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const hdr='<Row ss:StyleID="h">'+['#','雪場','國家','地區','開始日期','結束日期','天數','備註'].map(h=>`<Cell><Data ss:Type="String">${h}</Data></Cell>`).join('')+'</Row>';
+  const rows=sorted.map((e,i)=>'<Row>'+[sorted.length-i,e.resort,e.country,e.area,e.dateStart||e.date,e.dateEnd,e.days,e.note].map((v,ci)=>ci===6?`<Cell><Data ss:Type="Number">${v||0}</Data></Cell>`:`<Cell><Data ss:Type="String">${x(v)}</Data></Cell>`).join('')+'</Row>').join('');
+  const ttl=`<Row><Cell ss:MergeAcross="5" ss:StyleID="t"><Data ss:Type="String">合計</Data></Cell><Cell ss:StyleID="t"><Data ss:Type="Number">${total}</Data></Cell><Cell><Data ss:Type="String"></Data></Cell></Row>`;
+  const xml=`<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="h"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0369a1" ss:Pattern="Solid"/></Style><Style ss:ID="t"><Font ss:Bold="1"/><Interior ss:Color="#e0f2fe" ss:Pattern="Solid"/></Style></Styles><Worksheet ss:Name="滑雪紀錄"><Table><Column ss:Width="30"/><Column ss:Width="120"/><Column ss:Width="70"/><Column ss:Width="80"/><Column ss:Width="90"/><Column ss:Width="90"/><Column ss:Width="50"/><Column ss:Width="100"/>${hdr}${rows}${ttl}</Table></Worksheet></Workbook>`;
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'})),download:`雪齡紀錄_${new Date().toISOString().slice(0,10)}.xls`});a.click();URL.revokeObjectURL(a.href);showToast('✓ Excel 已下載');
 }
 
-async function clearAll() {
-  if(!confirm('確定要清除所有紀錄？'))return;
-  setSyncStatus('syncing','清除中…');
-  try{await window._fbClearAll();showToast('已清除所有紀錄');}
-  catch(err){showToast('⚠ 清除失敗：'+err.message);}
-}
+// Import
+function triggerImport(){document.getElementById('importFileInput').value='';document.getElementById('importFileInput').click();document.getElementById('importStatus').textContent='請選擇 .xls 或 .csv 檔案';document.getElementById('importPreview').style.display='none';document.getElementById('btnImportConfirm').style.display='none';document.getElementById('importModal').classList.add('open');document.body.style.overflow='hidden';}
+function closeImportModal(){document.getElementById('importModal').classList.remove('open');document.body.style.overflow='';importParsed=[];}
+function handleImportFile(ev){const file=ev.target.files[0];if(!file)return;const ext=file.name.split('.').pop().toLowerCase();const reader=new FileReader();if(ext==='csv'){reader.onload=e=>parseCSV(e.target.result,file.name);reader.readAsText(file,'UTF-8');}else{reader.onload=e=>parseXLS(e.target.result,file.name);reader.readAsText(file,'UTF-8');}}
+function parseXLS(text,filename){try{const rows=new DOMParser().parseFromString(text,'text/xml').querySelectorAll('Row');const res=[];rows.forEach((row,idx)=>{if(idx===0)return;const v=Array.from(row.querySelectorAll('Cell Data')).map(c=>c.textContent.trim());if(v.length<7)return;const resort=v[1],country=v[2],area=v[3],dateStart=v[4],dateEnd=v[5],days=parseInt(v[6]),note=v[7]||'';if(!resort||!days||isNaN(days))return;const year=dateStart?parseInt(dateStart.slice(0,4)):(dateEnd?parseInt(dateEnd.slice(0,4)):null);if(!year)return;res.push({resort,country,area,dateStart,dateEnd,days,note,year});});if(!res.length){parseCSV(text,filename);return;}showImportPreview(res,filename);}catch(e){document.getElementById('importStatus').textContent='⚠ 無法解析：'+e.message;}}
+function parseCSV(text,filename){try{const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines.length<2){document.getElementById('importStatus').textContent='⚠ 檔案是空的';return;}const hdr=lines[0].split(',').map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase());const ci={resort:hdr.findIndex(h=>h.includes('雪場')||h.includes('resort')),country:hdr.findIndex(h=>h.includes('國家')||h.includes('country')),area:hdr.findIndex(h=>h.includes('地區')||h.includes('area')),dateStart:hdr.findIndex(h=>h.includes('開始')||h.includes('start')),dateEnd:hdr.findIndex(h=>h.includes('結束')||h.includes('end')),days:hdr.findIndex(h=>h.includes('天數')||h.includes('day')),note:hdr.findIndex(h=>h.includes('備註')||h.includes('note'))};if(ci.resort<0||ci.days<0){document.getElementById('importStatus').textContent='⚠ 找不到必要欄位';return;}const res=[];for(let i=1;i<lines.length;i++){const cols=lines[i].split(',');const g=idx=>idx>=0&&idx<cols.length?(cols[idx]||'').trim().replace(/^"|"$/g,''):'';const resort=g(ci.resort),days=parseInt(g(ci.days));if(!resort||!days||isNaN(days))continue;const dateStart=g(ci.dateStart),dateEnd=g(ci.dateEnd);const year=dateStart?parseInt(dateStart.slice(0,4)):(dateEnd?parseInt(dateEnd.slice(0,4)):null);if(!year||isNaN(year))continue;res.push({resort,country:g(ci.country),area:g(ci.area),dateStart,dateEnd,days,note:g(ci.note),year});}showImportPreview(res,filename);}catch(e){document.getElementById('importStatus').textContent='⚠ 解析失敗：'+e.message;}}
+function showImportPreview(res,filename){importParsed=res;if(!res.length){document.getElementById('importStatus').textContent='⚠ 沒有找到有效紀錄';return;}document.getElementById('importStatus').textContent=`✓ 「${filename}」找到 ${res.length} 筆`;document.getElementById('importSummary').textContent=`合計 ${res.reduce((s,e)=>s+e.days,0)} 天・共 ${res.length} 筆`;document.getElementById('importPreviewList').innerHTML=res.slice(0,5).map(e=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:6px;"><div style="color:var(--snow);font-size:.88rem;">${esc(e.resort)}</div>${(e.country||e.area)?`<div style="color:var(--accent2);font-size:.7rem;">📍 ${[e.country,e.area].filter(Boolean).join(' · ')}</div>`:''}<div style="color:var(--muted);font-size:.7rem;margin-top:2px;">${e.dateStart||''} ${e.dateEnd?'～ '+e.dateEnd:''} · ${e.days} 天</div></div>`).join('')+(res.length>5?`<div style="text-align:center;color:var(--muted);font-size:.75rem;padding:6px;">… 還有 ${res.length-5} 筆</div>`:'');document.getElementById('importPreview').style.display='block';document.getElementById('btnImportConfirm').style.display='block';}
+async function confirmImport(){if(!importParsed.length)return;const btn=document.getElementById('btnImportConfirm');btn.disabled=true;btn.textContent='匯入中…';let ok=0,fail=0;for(const e of importParsed){try{await window._fbAdd(e);ok++;}catch{fail++;}}btn.disabled=false;btn.textContent='匯入全部';closeImportModal();showToast(`✓ 匯入完成：${ok} 筆${fail?'（'+fail+' 筆失敗）':''}`);}
 
-// ══════════════════════════════════════════════════════
-// VIEW-ONLY MODE (URL param ?view=UID)
-// ══════════════════════════════════════════════════════
-const urlParams = new URLSearchParams(location.search);
-const viewUid = urlParams.get('view');
-
-if (viewUid) {
-  // Hide login + main, show view app immediately
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'none';
-  document.getElementById('viewApp').style.display = 'block';
+// ══ VIEW-ONLY MODE ══════════════════════════════════
+const viewUid=new URLSearchParams(location.search).get('view');
+if(viewUid){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('viewApp').style.display='block';
   hideLoading();
-  // Load shared data
-  (async () => {
-    try {
-      const data = await window._fbReadShare(viewUid);
-      const entries = data.entries || [];
-      renderView(entries);
-      document.getElementById('viewOwnerLabel').textContent = '👁 瀏覽模式・共 ' + entries.length + ' 筆紀錄';
-    } catch(e) {
-      document.getElementById('viewEntriesList').innerHTML =
-        '<div class="empty-state"><div class="empty-icon">😶</div>找不到分享的紀錄，連結可能已失效</div>';
-    }
+  (async()=>{
+    try{
+      const data=await window._fbReadShare(viewUid);
+      const entries=data.entries||[];
+      const total=entries.reduce((s,e)=>s+(e.days||0),0);
+      document.getElementById('viewTotalDays').textContent=total;
+      document.getElementById('viewAgeBadge').textContent=getAgeLabel(total);
+      document.getElementById('viewOwnerRow').textContent=`👁 瀏覽模式・共 ${entries.length} 筆`;
+      const sorted=[...entries].sort((a,b)=>(b.dateStart||b.date||String(b.year||0)).localeCompare(a.dateStart||a.date||String(a.year||0)));
+      document.getElementById('viewEntriesList').innerHTML=sorted.length?sorted.map((e,i)=>cardHtml(e,sorted.length-i,false)).join(''):'<div class="empty"><div class="empty-i">🏔</div>這裡還沒有紀錄</div>';
+    }catch(e){document.getElementById('viewEntriesList').innerHTML='<div class="empty"><div class="empty-i">😶</div>找不到分享紀錄，連結可能已失效</div>';}
   })();
 }
 
-function renderView(entries) {
-  const total = entries.reduce((s,e) => s+(e.days||0), 0);
-  document.getElementById('viewTotalDays').textContent = total;
-  document.getElementById('viewSkiAgeBadge').textContent = getSkiAgeLabel(total);
-  const list = document.getElementById('viewEntriesList');
-  if (!entries.length) {
-    list.innerHTML = '<div class="empty-state"><div class="empty-icon">🏔</div>這裡還沒有紀錄</div>';
-    return;
-  }
-  const sorted = [...entries].sort((a,b) => {
-    const ak = a.dateStart||a.date||String(a.year||0);
-    const bk = b.dateStart||b.date||String(b.year||0);
-    return bk.localeCompare(ak);
-  });
-  list.innerHTML = sorted.map((e,i) => `
-    <div class="entry-card" style="cursor:default;">
-      <div class="entry-num">${sorted.length - i}</div>
-      <div class="entry-info">
-        <div class="entry-resort">${escHtml(e.resort||'')}</div>
-        ${(e.country||e.area)?`<div class="entry-location">📍 ${[e.country,e.area].filter(Boolean).join(' · ')}</div>`:''}
-        <div class="entry-meta">
-          <span>📅 ${formatDateRange(e)}</span>
-          ${e.note?`<span>💬 ${escHtml(e.note)}</span>`:''}
-        </div>
-      </div>
-      <div>
-        <div class="entry-days">${e.days}</div>
-        <div class="entry-days-label">天</div>
-      </div>
-    </div>
-  `).join('');
-  // store for export
-  window._viewEntries = entries;
+// ══ DATE RANGE CALENDAR ════════════════════════════════
+let calCtx='i',calYear,calMonth,calStart=null,calEnd=null,calSelecting='start';
+
+function openCal(ctx){
+  calCtx=ctx;
+  const sId=ctx==='i'?'inputDateStart':'editDateStart';
+  const eId=ctx==='i'?'inputDateEnd':'editDateEnd';
+  calStart=document.getElementById(sId).value||null;
+  calEnd=document.getElementById(eId).value||null;
+  calSelecting=calStart?(calEnd?'start':'end'):'start';
+  const base=calStart?new Date(calStart+'T00:00:00'):new Date();
+  calYear=base.getFullYear(); calMonth=base.getMonth();
+  renderCal();
+  document.getElementById('calOverlay').classList.add('open');
+  document.body.style.overflow='hidden';
 }
+function closeCal(){document.getElementById('calOverlay').classList.remove('open');document.body.style.overflow='';}
+function calBdClick(ev){if(ev.target===document.getElementById('calOverlay'))closeCal();}
+function calPrevMonth(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCal();}
+function calNextMonth(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCal();}
 
-function exportExcelView() {
-  exportToExcel(window._viewEntries || []);
-}
+function toYMD(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
-// ══════════════════════════════════════════════════════
-// EXCEL EXPORT  (pure JS, no library needed)
-// ══════════════════════════════════════════════════════
-function exportToExcel(data) {
-  if (!data || data.length === 0) { showToast('⚠ 沒有資料可以匯出'); return; }
-
-  const sorted = [...data].sort((a,b) => {
-    const ak = a.dateStart||a.date||String(a.year||0);
-    const bk = b.dateStart||b.date||String(b.year||0);
-    return bk.localeCompare(ak);
-  });
-
-  const total = sorted.reduce((s,e) => s+(e.days||0), 0);
-
-  // Build XML for Excel (SpreadsheetML)
-  const xmlRows = sorted.map((e,i) => {
-    const cells = [
-      sorted.length - i,
-      e.resort || '',
-      e.country || '',
-      e.area || '',
-      e.dateStart || e.date || '',
-      e.dateEnd || '',
-      e.days || 0,
-      e.note || ''
-    ];
-    return '<Row>' + cells.map(v => {
-      const isNum = typeof v === 'number';
-      return isNum
-        ? `<Cell><Data ss:Type="Number">${v}</Data></Cell>`
-        : `<Cell><Data ss:Type="String">${String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</Data></Cell>`;
-    }).join('') + '</Row>';
+function renderCal(){
+  const MN=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  document.getElementById('calMonthLabel').textContent=calYear+' '+MN[calMonth];
+  const todayStr=toYMD(new Date());
+  const firstDay=new Date(calYear,calMonth,1).getDay();
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const daysInPrev=new Date(calYear,calMonth,0).getDate();
+  const cells=[];
+  for(let i=firstDay-1;i>=0;i--)cells.push({d:daysInPrev-i,mo:calMonth-1,y:calYear,other:true});
+  for(let d=1;d<=daysInMonth;d++)cells.push({d,mo:calMonth,y:calYear,other:false});
+  const trailing=(7-cells.length%7)%7;
+  for(let d=1;d<=trailing;d++)cells.push({d,mo:calMonth+1,y:calYear,other:true});
+  const grid=document.getElementById('calGrid');
+  grid.innerHTML=cells.map(cell=>{
+    const m=((cell.mo%12)+12)%12;
+    const y=cell.y+Math.floor(cell.mo/12);
+    const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(cell.d).padStart(2,'0');
+    let cls='cal-day';
+    if(cell.other)cls+=' other-month';
+    if(ds===todayStr)cls+=' today';
+    const isS=calStart&&ds===calStart;
+    const isE=calEnd&&ds===calEnd;
+    const inR=calStart&&calEnd&&ds>calStart&&ds<calEnd;
+    if(isS)cls+=' start';
+    if(isE)cls+=' end';
+    if(inR)cls+=' in-range';
+    return`<div class="${cls}" onclick="calClickDay('${ds}')">${cell.d}</div>`;
   }).join('');
-
-  const headerRow = '<Row ss:StyleID="header">' +
-    ['#','雪場','國家','地區','開始日期','結束日期','天數','備註'].map(h =>
-      `<Cell><Data ss:Type="String">${h}</Data></Cell>`
-    ).join('') + '</Row>';
-
-  const totalRow = `<Row><Cell ss:MergeAcross="5" ss:StyleID="total"><Data ss:Type="String">合計</Data></Cell><Cell ss:StyleID="total"><Data ss:Type="Number">${total}</Data></Cell><Cell><Data ss:Type="String"></Data></Cell></Row>`;
-
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-<Styles>
-  <Style ss:ID="header">
-    <Font ss:Bold="1" ss:Color="#FFFFFF"/>
-    <Interior ss:Color="#0369a1" ss:Pattern="Solid"/>
-  </Style>
-  <Style ss:ID="total">
-    <Font ss:Bold="1"/>
-    <Interior ss:Color="#e0f2fe" ss:Pattern="Solid"/>
-  </Style>
-</Styles>
-<Worksheet ss:Name="滑雪紀錄">
-<Table>
-  <Column ss:Width="30"/>
-  <Column ss:Width="120"/>
-  <Column ss:Width="70"/>
-  <Column ss:Width="80"/>
-  <Column ss:Width="90"/>
-  <Column ss:Width="90"/>
-  <Column ss:Width="50"/>
-  <Column ss:Width="100"/>
-  ${headerRow}
-  ${xmlRows}
-  ${totalRow}
-</Table>
-</Worksheet>
-</Workbook>`;
-
-  const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const today = new Date().toISOString().slice(0,10);
-  a.download = `雪齡紀錄_${today}.xls`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('✓ Excel 已下載');
+  updateCalHint(); updateCalOkBtn();
 }
 
-function exportExcel() {
-  exportToExcel(window.entries || []);
-}
-
-// ══════════════════════════════════════════════════════
-// SHARE MODAL
-// ══════════════════════════════════════════════════════
-function openShareModal() {
-  document.getElementById('shareModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
-  // Reset state
-  document.getElementById('shareUrlBox').className = 'share-url-box';
-  document.getElementById('shareUrlBox').textContent = '點擊下方按鈕來產生分享連結';
-  document.getElementById('btnPublish').textContent = '🚀 發佈並複製連結';
-  document.getElementById('shareNote').textContent = '每次發佈會更新為最新資料';
-}
-
-function closeShareModal() {
-  document.getElementById('shareModal').classList.remove('open');
-  document.body.style.overflow = '';
-}
-
-function onShareBackdrop(ev) {
-  if (ev.target === document.getElementById('shareModal')) closeShareModal();
-}
-
-async function publishShare() {
-  const btn = document.getElementById('btnPublish');
-  btn.textContent = '發佈中…'; btn.disabled = true;
-  try {
-    await window._fbPublishShare();
-    const uid = window._fbCurrentUid();
-    const shareUrl = location.origin + location.pathname + '?view=' + uid;
-    document.getElementById('shareUrlBox').textContent = shareUrl;
-    document.getElementById('shareUrlBox').className = 'share-url-box ready';
-    // Copy to clipboard
-    await navigator.clipboard.writeText(shareUrl).catch(() => {});
-    btn.textContent = '✓ 連結已複製！';
-    document.getElementById('shareNote').textContent = '已複製到剪貼簿，傳給朋友即可瀏覽 🎿';
-    showToast('✓ 分享連結已複製');
-  } catch(e) {
-    showToast('⚠ 發佈失敗：' + e.message);
-    btn.textContent = '🚀 發佈並複製連結';
-  }
-  btn.disabled = false;
-}
-
-
-// ══════════════════════════════════════════════════════
-// EXCEL / CSV IMPORT
-// ══════════════════════════════════════════════════════
-let importParsed = [];
-
-function triggerImport() {
-  document.getElementById('importFileInput').value = '';
-  document.getElementById('importFileInput').click();
-  // Open modal in waiting state
-  document.getElementById('importStatus').textContent = '請選擇從本工具匯出的 .xls 或 .csv 檔案';
-  document.getElementById('importPreview').style.display = 'none';
-  document.getElementById('btnImportConfirm').style.display = 'none';
-  document.getElementById('importModal').classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeImportModal() {
-  document.getElementById('importModal').classList.remove('open');
-  document.body.style.overflow = '';
-  importParsed = [];
-}
-
-function onImportBackdrop(ev) {
-  if (ev.target === document.getElementById('importModal')) closeImportModal();
-}
-
-function handleImportFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const ext = file.name.split('.').pop().toLowerCase();
-  const reader = new FileReader();
-
-  if (ext === 'csv') {
-    reader.onload = e => parseCSV(e.target.result, file.name);
-    reader.readAsText(file, 'UTF-8');
+function calClickDay(ds){
+  if(calSelecting==='start'||(calStart&&calEnd)){
+    calStart=ds; calEnd=null; calSelecting='end';
   } else {
-    // XLS (our SpreadsheetML XML format)
-    reader.onload = e => parseXLS(e.target.result, file.name);
-    reader.readAsText(file, 'UTF-8');
+    if(ds<calStart){calEnd=calStart;calStart=ds;}
+    else calEnd=ds;
+    calSelecting='start';
   }
+  renderCal();
 }
 
-function parseXLS(text, filename) {
-  try {
-    // Parse our SpreadsheetML XML format
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(text, 'text/xml');
-    const rows = xmlDoc.querySelectorAll('Row');
-    const results = [];
+function updateCalHint(){
+  const h=document.getElementById('calHint');
+  if(!calStart){h.innerHTML='點選<span>開始日期</span>';return;}
+  if(!calEnd){h.innerHTML=`已選 <span>${calStart}</span>，再點選<span>結束日期</span>（或確認單日）`;return;}
+  const days=Math.round((new Date(calEnd+'T00:00:00')-new Date(calStart+'T00:00:00'))/86400000)+1;
+  h.innerHTML=`<span>${calStart}</span> ～ <span>${calEnd}</span>，共 <span>${days}</span> 天`;
+}
+function updateCalOkBtn(){document.getElementById('btnCalOk').disabled=!calStart;}
+function calClear(){calStart=null;calEnd=null;calSelecting='start';renderCal();}
 
-    rows.forEach((row, idx) => {
-      if (idx === 0) return; // skip header
-      const cells = row.querySelectorAll('Cell Data');
-      const vals = Array.from(cells).map(c => c.textContent.trim());
-      // cols: #, 雪場, 國家, 地區, 開始日期, 結束日期, 天數, 備註
-      if (vals.length < 7) return;
-      const resort = vals[1], country = vals[2], area = vals[3];
-      const dateStart = vals[4], dateEnd = vals[5];
-      const days = parseInt(vals[6]);
-      const note = vals[7] || '';
-      if (!resort || !days || isNaN(days)) return;
-      let year = dateStart ? parseInt(dateStart.slice(0,4)) : (dateEnd ? parseInt(dateEnd.slice(0,4)) : null);
-      if (!year) return;
-      results.push({ resort, country, area, dateStart, dateEnd, days, note, year });
-    });
-
-    if (results.length === 0) {
-      // Try as CSV fallback
-      parseCSV(text, filename);
-      return;
-    }
-    showImportPreview(results, filename);
-  } catch(e) {
-    document.getElementById('importStatus').textContent = '⚠ 無法解析檔案：' + e.message;
-  }
+function calConfirm(){
+  if(!calStart)return;
+  const s=calStart, e=calEnd||calStart;
+  const sId=calCtx==='i'?'inputDateStart':'editDateStart';
+  const eId=calCtx==='i'?'inputDateEnd':'editDateEnd';
+  const dId=calCtx==='i'?'inputDays':'editDays';
+  document.getElementById(sId).value=s;
+  document.getElementById(eId).value=e;
+  const days=Math.round((new Date(e+'T00:00:00')-new Date(s+'T00:00:00'))/86400000)+1;
+  document.getElementById(dId).value=days;
+  setCalDisplay(calCtx,s,e);
+  closeCal();
 }
 
-function parseCSV(text, filename) {
-  try {
-    const lines = text.split(/\r?\n/).filter(l => l.trim());
-    if (lines.length < 2) { document.getElementById('importStatus').textContent = '⚠ 檔案是空的'; return; }
-
-    // Auto-detect header
-    const header = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,'').toLowerCase());
-    const colIdx = {
-      resort:    header.findIndex(h => h.includes('雪場') || h.includes('resort')),
-      country:   header.findIndex(h => h.includes('國家') || h.includes('country')),
-      area:      header.findIndex(h => h.includes('地區') || h.includes('area')),
-      dateStart: header.findIndex(h => h.includes('開始') || h.includes('start')),
-      dateEnd:   header.findIndex(h => h.includes('結束') || h.includes('end')),
-      days:      header.findIndex(h => h.includes('天數') || h.includes('day')),
-      note:      header.findIndex(h => h.includes('備註') || h.includes('note')),
-    };
-
-    if (colIdx.resort < 0 || colIdx.days < 0) {
-      document.getElementById('importStatus').textContent = '⚠ 找不到必要欄位（雪場、天數），請確認是否為本工具匯出的格式';
-      return;
-    }
-
-    const results = [];
-    for (let i = 1; i < lines.length; i++) {
-      // Handle quoted CSV
-      const cols = lines[i].match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,)|(?<=,)$)/g) || lines[i].split(',');
-      const get = idx => idx >= 0 && idx < cols.length ? (cols[idx]||'').trim().replace(/^"|"$/g,'') : '';
-      const resort = get(colIdx.resort);
-      const days = parseInt(get(colIdx.days));
-      if (!resort || !days || isNaN(days)) continue;
-      const dateStart = get(colIdx.dateStart);
-      const dateEnd   = get(colIdx.dateEnd);
-      const country   = get(colIdx.country);
-      const area      = get(colIdx.area);
-      const note      = get(colIdx.note);
-      let year = dateStart ? parseInt(dateStart.slice(0,4)) : (dateEnd ? parseInt(dateEnd.slice(0,4)) : null);
-      if (!year || isNaN(year)) continue;
-      results.push({ resort, country, area, dateStart, dateEnd, days, note, year });
-    }
-    showImportPreview(results, filename);
-  } catch(e) {
-    document.getElementById('importStatus').textContent = '⚠ 解析失敗：' + e.message;
-  }
-}
-
-function showImportPreview(results, filename) {
-  importParsed = results;
-
-  if (results.length === 0) {
-    document.getElementById('importStatus').textContent = '⚠ 沒有找到有效的紀錄，請確認格式正確';
-    document.getElementById('importPreview').style.display = 'none';
-    document.getElementById('btnImportConfirm').style.display = 'none';
-    return;
-  }
-
-  document.getElementById('importStatus').textContent = `✓ 已解析「${filename}」，找到 ${results.length} 筆紀錄`;
-  const totalDays = results.reduce((s,e) => s+e.days, 0);
-  document.getElementById('importSummary').textContent = `合計 ${totalDays} 天，共 ${results.length} 筆`;
-
-  const preview = results.slice(0,5);
-  document.getElementById('importPreviewList').innerHTML = preview.map(e => `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 14px;">
-      <div style="color:var(--snow);font-size:0.9rem;">${escHtml(e.resort)}</div>
-      ${(e.country||e.area)?`<div style="color:var(--accent2);font-size:0.72rem;">📍 ${[e.country,e.area].filter(Boolean).join(' · ')}</div>`:''}
-      <div style="color:var(--muted);font-size:0.72rem;margin-top:2px;">
-        ${e.dateStart||''} ${e.dateEnd?'～ '+e.dateEnd:''} &nbsp;·&nbsp; ${e.days} 天
-      </div>
-    </div>
-  `).join('') + (results.length > 5 ? `<div style="text-align:center;color:var(--muted);font-size:0.78rem;padding:6px;">… 還有 ${results.length-5} 筆</div>` : '');
-
-  document.getElementById('importPreview').style.display = 'block';
-  document.getElementById('btnImportConfirm').style.display = 'block';
-}
-
-async function confirmImport() {
-  if (!importParsed.length) return;
-  const btn = document.getElementById('btnImportConfirm');
-  btn.disabled = true; btn.textContent = '匯入中…';
-  setSyncStatus('syncing', '匯入中…');
-
-  let success = 0, fail = 0;
-  for (const entry of importParsed) {
-    try {
-      await window._fbAdd(entry);
-      success++;
-    } catch(e) { fail++; }
-  }
-
-  btn.disabled = false; btn.textContent = '匯入全部';
-  closeImportModal();
-  showToast(`✓ 匯入完成：${success} 筆${fail?'（'+fail+' 筆失敗）':''}`);
+function setCalDisplay(ctx,s,e){
+  const txtId=ctx==='i'?'drTextI':'drTextE';
+  const txt=document.getElementById(txtId);
+  if(!s){txt.className='dr-text';txt.textContent='點擊選擇日期';return;}
+  const end=e||s;
+  const days=Math.round((new Date(end+'T00:00:00')-new Date(s+'T00:00:00'))/86400000)+1;
+  txt.className='dr-text set';
+  txt.textContent=s===end?s:`${s}  ～  ${end}（${days} 天）`;
 }
 
 </script>
+
+<!-- ══ DATE RANGE CALENDAR ══ -->
+<div class="cal-overlay" id="calOverlay" onclick="calBdClick(event)">
+  <div class="cal-sheet">
+    <div class="cal-handle"></div>
+    <div class="cal-head">
+      <div class="cal-title">選擇日期範圍</div>
+      <button class="cal-close" onclick="closeCal()">✕</button>
+    </div>
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="calPrevMonth()">‹</button>
+      <div class="cal-month-label" id="calMonthLabel"></div>
+      <button class="cal-nav-btn" onclick="calNextMonth()">›</button>
+    </div>
+    <div class="cal-weekdays">
+      <div class="cal-wd">日</div><div class="cal-wd">一</div><div class="cal-wd">二</div>
+      <div class="cal-wd">三</div><div class="cal-wd">四</div><div class="cal-wd">五</div><div class="cal-wd">六</div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-hint" id="calHint">點選<span>開始日期</span></div>
+    <div class="cal-confirm">
+      <button class="btn-cal-clear" onclick="calClear()">清除</button>
+      <button class="btn-cal-ok" id="btnCalOk" onclick="calConfirm()" disabled>確認</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
