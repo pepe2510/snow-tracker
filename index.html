@@ -187,55 +187,50 @@ input:focus { border-color:var(--accent2); box-shadow:0 0 0 3px rgba(56,189,248,
 
 /* ── 日曆選擇器 ── */
 .date-range-wrap { position:relative; }
-.date-trigger { display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; cursor:pointer; min-height:48px; width:100%; text-align:left; -webkit-tap-highlight-color:transparent; transition:border-color .2s; }
+.date-trigger { display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; cursor:pointer; min-height:48px; width:100%; text-align:left; -webkit-tap-highlight-color:transparent; transition:border-color .2s; user-select:none; }
 .date-trigger.has-value { border-color:rgba(56,189,248,.45); }
 .dt-icon { font-size:1rem; flex-shrink:0; }
 .dt-text { flex:1; font-family:'Noto Serif TC',serif; font-size:.93rem; color:var(--text); }
 .dt-text.ph { color:var(--muted); }
-.dt-clear { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1rem; padding:2px 4px; line-height:1; -webkit-tap-highlight-color:transparent; }
+.dt-clear { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1rem; padding:2px 6px; line-height:1; -webkit-tap-highlight-color:transparent; }
 .dt-clear:hover { color:var(--danger); }
-
-.dp-panel { display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:500; background:var(--card); border:1px solid var(--accent2); border-radius:16px; box-shadow:0 16px 48px rgba(0,0,0,.55); width:296px; max-width:calc(100vw - 32px); overflow:hidden; animation:dpIn .15s ease; }
+.dp-panel { display:none; position:fixed; z-index:500; background:var(--card); border:1px solid var(--accent2); border-radius:16px; box-shadow:0 16px 56px rgba(0,0,0,.7); width:580px; max-width:calc(100vw - 16px); overflow:hidden; animation:dpIn .15s ease; }
 .dp-panel.open { display:block; }
-@keyframes dpIn { from{opacity:0;transform:translateY(-5px)} to{opacity:1;transform:translateY(0)} }
-
-.dp-nav { display:flex; align-items:center; justify-content:space-between; padding:13px 13px 7px; }
-.dp-arr { background:none; border:1px solid var(--border); border-radius:8px; color:var(--accent); width:34px; height:34px; cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; flex-shrink:0; transition:background .12s; }
-.dp-arr:active { background:rgba(56,189,248,.12); }
-.dp-nav-mid { display:flex; align-items:baseline; gap:5px; }
-.dp-yr { font-size:1.05rem; font-weight:700; color:var(--snow); cursor:pointer; padding:4px 8px; border-radius:7px; border:1px solid transparent; transition:all .14s; }
-.dp-yr:hover { background:rgba(56,189,248,.1); border-color:rgba(56,189,248,.3); color:var(--accent2); }
-.dp-mo { font-size:.95rem; color:var(--muted); }
-
-/* 年份格 */
-.dp-yrgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; }
-.dp-yrcell { padding:9px 2px; text-align:center; border-radius:8px; cursor:pointer; font-size:.83rem; color:var(--text); -webkit-tap-highlight-color:transparent; transition:all .11s; }
+@keyframes dpIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+.dp-yr-nav { display:flex; align-items:center; justify-content:space-between; padding:12px 14px 6px; }
+.dp-yrgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; padding:4px 14px 14px; }
+.dp-yrcell { padding:9px 2px; text-align:center; border-radius:8px; cursor:pointer; font-size:.83rem; color:var(--text); -webkit-tap-highlight-color:transparent; transition:background .11s; }
 .dp-yrcell:hover { background:rgba(56,189,248,.12); color:var(--accent2); }
 .dp-yrcell.ycur { color:var(--accent); }
 .dp-yrcell.ysel { background:var(--accent2); color:#0a0e1a; font-weight:700; }
-
-/* 月曆 */
-.dp-cal { padding:0 10px; }
+.dp-nav { display:flex; align-items:center; justify-content:space-between; padding:10px 12px 4px; border-bottom:1px solid var(--border); }
+.dp-arr { background:none; border:1px solid var(--border); border-radius:8px; color:var(--accent); width:32px; height:32px; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; -webkit-tap-highlight-color:transparent; transition:background .12s; flex-shrink:0; }
+.dp-arr:active { background:rgba(56,189,248,.12); }
+.dp-nav-months { display:flex; flex:1; justify-content:space-around; }
+.dp-nav-mo { display:flex; align-items:baseline; gap:4px; }
+.dp-yr-btn { font-size:.95rem; font-weight:700; color:var(--snow); cursor:pointer; padding:3px 7px; border-radius:6px; border:1px solid transparent; transition:all .14s; }
+.dp-yr-btn:hover { background:rgba(56,189,248,.1); border-color:rgba(56,189,248,.3); color:var(--accent2); }
+.dp-mo-lbl { font-size:.88rem; color:var(--muted); }
+.dp-months { display:grid; grid-template-columns:1fr 1fr; }
+.dp-month { padding:8px 10px 4px; }
+.dp-month:first-child { border-right:1px solid var(--border); }
 .dp-wdays { display:grid; grid-template-columns:repeat(7,1fr); margin-bottom:2px; }
-.dp-wd { text-align:center; font-size:.67rem; color:var(--muted); padding:4px 0; }
-.dp-days { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; }
-.dp-d { text-align:center; padding:7px 0; border-radius:8px; cursor:pointer; font-size:.84rem; color:var(--text); position:relative; -webkit-tap-highlight-color:transparent; min-height:32px; display:flex; align-items:center; justify-content:center; transition:background .1s; }
-.dp-d.emp { cursor:default; pointer-events:none; }
-.dp-d:not(.emp):hover { background:rgba(56,189,248,.15); color:var(--accent2); }
+.dp-wd { text-align:center; font-size:.62rem; color:var(--muted); padding:3px 0; }
+.dp-days { display:grid; grid-template-columns:repeat(7,1fr); }
+.dp-d { text-align:center; padding:5px 0; cursor:pointer; font-size:.82rem; color:var(--text); position:relative; -webkit-tap-highlight-color:transparent; min-height:30px; display:flex; align-items:center; justify-content:center; transition:background .08s; }
+.dp-d.emp { cursor:default; pointer-events:none; color:transparent; }
+.dp-d:not(.emp):not(.ds):not(.de):not(.ir):hover { background:rgba(56,189,248,.15); color:var(--accent2); border-radius:6px; }
 .dp-d.tod::after { content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:4px; height:4px; border-radius:50%; background:var(--accent); }
-.dp-d.ds, .dp-d.de { background:var(--accent2) !important; color:#0a0e1a !important; font-weight:700; border-radius:8px; }
-.dp-d.ir { background:rgba(56,189,248,.13); color:var(--accent2); border-radius:0; }
-.dp-d.ir.ds { border-radius:8px 0 0 8px; }
-.dp-d.ir.de { border-radius:0 8px 8px 0; }
-.dp-d.ds.de { border-radius:8px !important; }
-
-.dp-foot { display:flex; align-items:center; gap:8px; padding:10px 11px 13px; border-top:1px solid var(--border); margin-top:6px; }
-.dp-finfo { flex:1; font-size:.74rem; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.dp-clr { background:none; border:1px solid var(--border); border-radius:7px; color:var(--muted); font-family:'Noto Serif TC',serif; font-size:.75rem; padding:6px 10px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.dp-d.ds { background:var(--accent2) !important; color:#0a0e1a !important; font-weight:700; border-radius:6px 0 0 6px; }
+.dp-d.de { background:var(--accent2) !important; color:#0a0e1a !important; font-weight:700; border-radius:0 6px 6px 0; }
+.dp-d.ds.de { border-radius:6px !important; }
+.dp-d.ir { background:rgba(56,189,248,.15); color:var(--accent2); border-radius:0; }
+.dp-foot { display:flex; align-items:center; gap:8px; padding:8px 14px 12px; border-top:1px solid var(--border); }
+.dp-finfo { flex:1; font-size:.73rem; color:var(--muted); }
+.dp-clr { background:none; border:1px solid var(--border); border-radius:7px; color:var(--muted); font-family:'Noto Serif TC',serif; font-size:.74rem; padding:5px 10px; cursor:pointer; }
 .dp-clr:active { color:var(--danger); border-color:rgba(248,113,113,.4); }
-.dp-ok { background:linear-gradient(135deg,#0369a1,#0284c7); border:none; border-radius:7px; color:#fff; font-family:'Noto Serif TC',serif; font-size:.75rem; padding:6px 14px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.dp-ok { background:linear-gradient(135deg,#0369a1,#0284c7); border:none; border-radius:7px; color:#fff; font-family:'Noto Serif TC',serif; font-size:.74rem; padding:5px 14px; cursor:pointer; }
 .dp-ok:active { opacity:.85; }
-
 /* 雪場自動完成 */
 .resort-wrap { position:relative; }
 .autocomplete-list { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surface); border:1px solid var(--accent2); border-radius:10px; z-index:200; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,.4); max-height:220px; overflow-y:auto; }
@@ -676,260 +671,235 @@ const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','
 const WDAYS  = ['日','一','二','三','四','五','六'];
 
 const DP = {
-  input: { start:null, end:null, picking:false, y:0, m:0, showYr:false, yrBase:0 },
-  edit:  { start:null, end:null, picking:false, y:0, m:0, showYr:false, yrBase:0 }
+  input: { y:0, m:0, start:null, end:null, hov:null, showYr:false, yrBase:0 },
+  edit:  { y:0, m:0, start:null, end:null, hov:null, showYr:false, yrBase:0 }
 };
 
-function d2s(y, m, d) {
-  return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-}
-function todayObj() {
-  const t = new Date();
-  return { y: t.getFullYear(), m: t.getMonth(), d: t.getDate() };
+function d2s(y,m,d){ return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
+function todayObj(){ const t=new Date(); return {y:t.getFullYear(), m:t.getMonth(), d:t.getDate()}; }
+function addM(y,m,n){ m+=n; while(m>11){m-=12;y++;} while(m<0){m+=12;y--;} return {y,m}; }
+function mk(tag,cls){ const e=document.createElement(tag); if(cls)e.className=cls; return e; }
+function mkBtn(cls,txt,fn){ const b=mk('button',cls); b.textContent=txt; b.addEventListener('click',fn); return b; }
+
+// ─── 面板定位（fixed，跟隨 trigger）─────────────────
+function dpPosition(ctx){
+  const wrap  = document.getElementById(ctx+'DateWrap');
+  const panel = document.getElementById(ctx+'DatePanel');
+  if(!wrap||!panel||!panel.classList.contains('open')) return;
+  const r  = wrap.getBoundingClientRect();
+  const pw = Math.min(580, window.innerWidth-16);
+  let left = r.left + r.width/2 - pw/2;
+  left = Math.max(8, Math.min(left, window.innerWidth-pw-8));
+  let top = r.bottom + 6;
+  if(top + 340 > window.innerHeight-8) top = r.top - 340 - 6;
+  panel.style.left  = left+'px';
+  panel.style.top   = top+'px';
+  panel.style.width = pw+'px';
 }
 
-function dpToggle(ctx) {
-  const panel = document.getElementById(ctx + 'DatePanel');
-  const wasOpen = panel.classList.contains('open');
-  document.querySelectorAll('.dp-panel').forEach(p => p.classList.remove('open'));
-  if (!wasOpen) {
-    const s = DP[ctx];
-    const ref = s.start ? { y: +s.start.slice(0,4), m: +s.start.slice(5,7)-1 } : todayObj();
-    s.y = ref.y; s.m = ref.m; s.showYr = false; s.yrBase = Math.floor(ref.y / 16) * 16;
-    dpRender(ctx);
-    panel.classList.add('open');
-  }
+// ─── 開關 ────────────────────────────────────────────
+function dpToggle(ctx){
+  const panel = document.getElementById(ctx+'DatePanel');
+  if(panel.classList.contains('open')){ dpClose(ctx); return; }
+  ['input','edit'].forEach(c=>{ if(c!==ctx) dpClose(c); });
+  const s=DP[ctx];
+  const ref = s.start ? {y:+s.start.slice(0,4), m:+s.start.slice(5,7)-1} : todayObj();
+  s.y=ref.y; s.m=ref.m; s.hov=null; s.showYr=false; s.yrBase=Math.floor(ref.y/16)*16;
+  dpRender(ctx);
+  panel.classList.add('open');
+  setTimeout(()=>dpPosition(ctx), 0);
 }
-function dpClose(ctx) { document.getElementById(ctx + 'DatePanel').classList.remove('open'); }
+function dpClose(ctx){ document.getElementById(ctx+'DatePanel').classList.remove('open'); }
 
-function dpClearBtn(ctx, ev) { ev.stopPropagation(); ev.preventDefault(); dpClear(ctx); }
-function dpClear(ctx) {
-  const s = DP[ctx];
-  s.start = null; s.end = null; s.picking = false;
-  dpUpdateTrigger(ctx);
-  dpSyncDays(ctx);
-  if (document.getElementById(ctx + 'DatePanel').classList.contains('open')) dpRender(ctx);
+// ─── 清除 ────────────────────────────────────────────
+function dpClearBtn(ctx,ev){ ev.stopPropagation(); ev.preventDefault(); dpClear(ctx); }
+function dpClear(ctx){
+  const s=DP[ctx]; s.start=null; s.end=null; s.hov=null;
+  dpUpdateTrigger(ctx); dpSyncDays(ctx);
+  if(document.getElementById(ctx+'DatePanel').classList.contains('open')) dpRender(ctx);
 }
 
-function dpUpdateTrigger(ctx) {
-  const s = DP[ctx];
-  const disp = document.getElementById(ctx + 'DateDisplay');
-  const trig = document.getElementById(ctx + 'DateTrigger');
-  const clr  = document.getElementById(ctx + 'DateClear');
-  if (s.start && s.end && s.start !== s.end) {
-    disp.textContent = s.start + ' ～ ' + s.end;
-    disp.className = 'dt-text';
-    trig.classList.add('has-value');
-    clr.style.display = 'block';
-  } else if (s.start) {
-    disp.textContent = s.picking ? s.start + ' ～ 選擇結束日…' : s.start;
-    disp.className = 'dt-text';
-    trig.classList.add('has-value');
-    clr.style.display = s.picking ? 'none' : 'block';
+// ─── 觸發按鈕文字 ────────────────────────────────────
+function dpUpdateTrigger(ctx){
+  const s=DP[ctx];
+  const disp=document.getElementById(ctx+'DateDisplay');
+  const trig=document.getElementById(ctx+'DateTrigger');
+  const clr =document.getElementById(ctx+'DateClear');
+  if(s.start && s.end && s.start!==s.end){
+    disp.textContent=s.start+' ～ '+s.end; disp.className='dt-text';
+    trig.classList.add('has-value'); clr.style.display='block';
+  } else if(s.start){
+    disp.textContent=s.start; disp.className='dt-text';
+    trig.classList.add('has-value'); clr.style.display='block';
   } else {
-    disp.textContent = '選擇日期…';
-    disp.className = 'dt-text ph';
-    trig.classList.remove('has-value');
-    clr.style.display = 'none';
+    disp.textContent='選擇日期…'; disp.className='dt-text ph';
+    trig.classList.remove('has-value'); clr.style.display='none';
   }
 }
 
-function dpSyncDays(ctx) {
-  const s  = DP[ctx];
-  const el = document.getElementById(ctx === 'input' ? 'inputDays' : 'editDays');
-  if (s.start && s.end)
-    el.value = Math.max(1, Math.round((new Date(s.end) - new Date(s.start)) / 86400000) + 1);
-  else if (s.start)
-    el.value = 1;
-  else
-    el.value = '';
+// ─── 天數同步 ────────────────────────────────────────
+function dpSyncDays(ctx){
+  const s=DP[ctx];
+  const el=document.getElementById(ctx==='input'?'inputDays':'editDays');
+  if(s.start&&s.end&&s.start!==s.end)
+    el.value=Math.round((new Date(s.end)-new Date(s.start))/86400000)+1;
+  else if(s.start) el.value=1;
+  else el.value='';
 }
 
-function dpRender(ctx) {
-  const panel = document.getElementById(ctx + 'DatePanel');
-  DP[ctx].showYr ? dpRenderYear(ctx, panel) : dpRenderCal(ctx, panel);
+// ─── 主渲染 ──────────────────────────────────────────
+function dpRender(ctx){
+  const panel=document.getElementById(ctx+'DatePanel');
+  panel.innerHTML='';
+  const s=DP[ctx];
+  if(s.showYr){ dpRenderYear(ctx,panel); return; }
+
+  const r2 = addM(s.y, s.m, 1);   // 右月
+
+  // 導覽列
+  const nav = mk('div','dp-nav');
+  const btnL = mkBtn('dp-arr','‹', e=>{ e.stopPropagation(); const p=addM(s.y,s.m,-1); s.y=p.y; s.m=p.m; dpRender(ctx); });
+  const navMos = mk('div','dp-nav-months');
+  // 左月標題
+  const moL=mk('div','dp-nav-mo');
+  const yrL=mk('span','dp-yr-btn'); yrL.textContent=s.y;
+  yrL.addEventListener('click',e=>{ e.stopPropagation(); s.showYr=true; s.yrBase=Math.floor(s.y/16)*16; dpRender(ctx); });
+  const mlL=mk('span','dp-mo-lbl'); mlL.textContent=MONTHS[s.m];
+  moL.append(yrL,mlL);
+  // 右月標題
+  const moR=mk('div','dp-nav-mo');
+  const yrR=mk('span','dp-yr-btn'); yrR.textContent=r2.y;
+  yrR.addEventListener('click',e=>{ e.stopPropagation(); s.showYr=true; s.yrBase=Math.floor(r2.y/16)*16; dpRender(ctx); });
+  const mlR=mk('span','dp-mo-lbl'); mlR.textContent=MONTHS[r2.m];
+  moR.append(yrR,mlR);
+  navMos.append(moL,moR);
+  const btnR=mkBtn('dp-arr','›', e=>{ e.stopPropagation(); const p=addM(s.y,s.m,1); s.y=p.y; s.m=p.m; dpRender(ctx); });
+  nav.append(btnL,navMos,btnR);
+
+  // 雙月格
+  const months=mk('div','dp-months');
+  months.append(dpBuildMonth(ctx,s.y,s.m), dpBuildMonth(ctx,r2.y,r2.m));
+
+  // 底部提示
+  const lo = s.start&&s.end ? (s.start<=s.end?s.start:s.end) : s.start;
+  const hi = s.start&&s.end ? (s.start<=s.end?s.end:s.start) : s.start;
+  let info='';
+  if(lo&&hi&&lo!==hi) info=lo+' ～ '+hi+'　共 '+(Math.round((new Date(hi)-new Date(lo))/86400000)+1)+' 天';
+  else if(lo) info='起日 '+lo+'　再點一天設迄日';
+  else info='點選起日，再點迄日';
+  const foot=mk('div','dp-foot');
+  const finfo=mk('div','dp-finfo'); finfo.textContent=info;
+  const btnClr=mkBtn('dp-clr','清除',e=>{ e.stopPropagation(); dpClear(ctx); });
+  const btnOk =mkBtn('dp-ok','確定', e=>{ e.stopPropagation(); dpConfirm(ctx); });
+  foot.append(finfo,btnClr,btnOk);
+
+  panel.append(nav,months,foot);
 }
 
-function dpRenderYear(ctx, panel) {
-  const s = DP[ctx];
-  const base = s.yrBase, curY = todayObj().y;
-  // Build structure
-  panel.innerHTML = '';
-  const nav = document.createElement('div');
-  nav.className = 'dp-nav';
-  nav.style.paddingBottom = '6px';
-  const btnPrev = document.createElement('button');
-  btnPrev.className = 'dp-arr'; btnPrev.textContent = '‹';
-  btnPrev.addEventListener('click', e => { e.stopPropagation(); s.yrBase -= 16; dpRender(ctx); });
-  const lbl = document.createElement('span');
-  lbl.style.cssText = 'font-size:.8rem;color:var(--muted)';
-  lbl.textContent = base + '–' + (base + 15);
-  const btnNext = document.createElement('button');
-  btnNext.className = 'dp-arr'; btnNext.textContent = '›';
-  btnNext.addEventListener('click', e => { e.stopPropagation(); s.yrBase += 16; dpRender(ctx); });
-  nav.append(btnPrev, lbl, btnNext);
-  const wrap = document.createElement('div');
-  wrap.style.padding = '0 12px 14px';
-  const grid = document.createElement('div');
-  grid.className = 'dp-yrgrid';
-  for (let y = base; y < base + 16; y++) {
-    const cell = document.createElement('div');
-    cell.className = 'dp-yrcell' + (y===s.y?' ysel':'') + (y===curY&&y!==s.y?' ycur':'');
-    cell.textContent = y;
-    const _y = y;
-    cell.addEventListener('click', e => { e.stopPropagation(); s.y = _y; s.showYr = false; dpRender(ctx); });
-    grid.appendChild(cell);
+// ─── 建立單月格 ──────────────────────────────────────
+function dpBuildMonth(ctx, y, m){
+  const s=DP[ctx]; const today=todayObj();
+  const firstDay=new Date(y,m,1).getDay();
+  const dim=new Date(y,m+1,0).getDate();
+  const wrap=mk('div','dp-month');
+  const wdays=mk('div','dp-wdays');
+  WDAYS.forEach(w=>{ const d=mk('div','dp-wd'); d.textContent=w; wdays.appendChild(d); });
+  const grid=mk('div','dp-days');
+  for(let i=0;i<firstDay;i++){ grid.appendChild(mk('div','dp-d emp')); }
+  for(let d=1;d<=dim;d++){
+    const ds=d2s(y,m,d);
+    const col=(firstDay+d-1)%7;
+    const el=mk('div', dpDayCls(ds,s,today,y,m,d,col,dim,firstDay));
+    el.textContent=d;
+    el.addEventListener('click', e=>{ e.stopPropagation(); dpClickDay(ctx,ds); });
+    el.addEventListener('mouseenter', ()=>dpHov(ctx,ds));
+    grid.appendChild(el);
   }
-  wrap.appendChild(grid);
-  panel.append(nav, wrap);
+  wrap.append(wdays,grid);
+  return wrap;
 }
 
-function dpRenderCal(ctx, panel) {
-  const s = DP[ctx];
-  const { y, m } = s;
-  const today = todayObj();
-  const firstDay = new Date(y, m, 1).getDay();
-  const dim = new Date(y, m + 1, 0).getDate();
+// ─── 計算日格 class ───────────────────────────────────
+function dpDayCls(ds, s, today, y, m, d, col, dim, firstDay){
+  let cls='dp-d';
+  if(y===today.y && m===today.m && d===today.d) cls+=' tod';
 
-  let info = '';
-  if (s.start && s.end && s.start !== s.end)
-    info = '共 ' + (Math.round((new Date(s.end)-new Date(s.start))/86400000)+1) + ' 天';
-  else if (s.start && s.picking) info = '再點一天設定結束日';
-  else if (s.start) info = s.start;
+  // hover 預覽：有起日無迄日時，用 hov 代替 end
+  const anchor = s.start;
+  const other  = (s.start && !s.end) ? s.hov : s.end;
+  const lo = anchor&&other ? (anchor<=other?anchor:other) : anchor;
+  const hi = anchor&&other ? (anchor<=other?other:anchor) : anchor;
 
-  panel.innerHTML = '';
-
-  // Nav row
-  const nav = document.createElement('div'); nav.className = 'dp-nav';
-  const btnPrev = document.createElement('button'); btnPrev.className = 'dp-arr'; btnPrev.textContent = '‹';
-  btnPrev.addEventListener('click', e => { e.stopPropagation(); dpShiftM(ctx, -1); });
-  const mid = document.createElement('div'); mid.className = 'dp-nav-mid';
-  const yrSpan = document.createElement('span'); yrSpan.className = 'dp-yr'; yrSpan.textContent = y;
-  yrSpan.addEventListener('click', e => { e.stopPropagation(); s.showYr = true; s.yrBase = Math.floor(s.y/16)*16; dpRender(ctx); });
-  const moSpan = document.createElement('span'); moSpan.className = 'dp-mo'; moSpan.textContent = MONTHS[m];
-  mid.append(yrSpan, moSpan);
-  const btnNext = document.createElement('button'); btnNext.className = 'dp-arr'; btnNext.textContent = '›';
-  btnNext.addEventListener('click', e => { e.stopPropagation(); dpShiftM(ctx, 1); });
-  nav.append(btnPrev, mid, btnNext);
-
-  // Calendar body
-  const cal = document.createElement('div'); cal.className = 'dp-cal';
-  const wdays = document.createElement('div'); wdays.className = 'dp-wdays';
-  WDAYS.forEach(w => { const d = document.createElement('div'); d.className = 'dp-wd'; d.textContent = w; wdays.appendChild(d); });
-  const daysGrid = document.createElement('div'); daysGrid.className = 'dp-days';
-  for (let i = 0; i < firstDay; i++) {
-    const el = document.createElement('div'); el.className = 'dp-d emp'; daysGrid.appendChild(el);
-  }
-  for (let d = 1; d <= dim; d++) {
-    const ds = d2s(y, m, d);
-    const el = document.createElement('div');
-    el.className = dpDayCls(ds, s, today, y, m, d);
-    el.textContent = d;
-    el.addEventListener('click', e => { e.stopPropagation(); dpClickDay(ctx, ds); });
-    el.addEventListener('mouseenter', () => dpHover(ctx, ds));
-    daysGrid.appendChild(el);
-  }
-  cal.append(wdays, daysGrid);
-
-  // Footer
-  const foot = document.createElement('div'); foot.className = 'dp-foot';
-  const finfo = document.createElement('div'); finfo.className = 'dp-finfo'; finfo.textContent = info;
-  const btnClr = document.createElement('button'); btnClr.className = 'dp-clr'; btnClr.textContent = '清除';
-  btnClr.addEventListener('click', e => { e.stopPropagation(); dpClear(ctx); });
-  const btnOk = document.createElement('button'); btnOk.className = 'dp-ok'; btnOk.textContent = '確定';
-  btnOk.addEventListener('click', e => { e.stopPropagation(); dpConfirm(ctx); });
-  foot.append(finfo, btnClr, btnOk);
-
-  panel.append(nav, cal, foot);
-}
-
-// 共用：根據狀態計算日格 class
-function dpDayCls(ds, s, today, y, m, d) {
-  let cls = 'dp-d';
-  if (y===today.y && m===today.m && d===today.d) cls += ' tod';
-  if (s.start && s.end) {
-    const lo = s.start <= s.end ? s.start : s.end;
-    const hi = s.start <= s.end ? s.end   : s.start;
-    if (ds===lo && ds===hi)  cls += ' ds de';
-    else if (ds===lo)         cls += ' ds ir';
-    else if (ds===hi)         cls += ' ir de';
-    else if (ds>lo && ds<hi) cls += ' ir';
-  } else if (s.start) {
-    if (ds === s.start) cls += ' ds de';
+  if(lo && hi){
+    const isLo=ds===lo, isHi=ds===hi, inRange=ds>lo&&ds<hi;
+    const isLastCol=col===6, isFirstCol=col===0, isLastDay=d===dim, isFirstDay=d===1;
+    if(isLo && isHi){ cls+=' ds de'; }
+    else if(isLo){ cls+=' ds'; if(isLastCol||isLastDay) cls+=' de'; }  // 月末/行末自動收尾
+    else if(isHi){ cls+=' de'; if(isFirstCol||isFirstDay) cls+=' ds'; } // 月初/行首自動補頭
+    else if(inRange){ cls+=' ir'; }
   }
   return cls;
 }
 
-function dpShiftM(ctx, dir) {
-  const s = DP[ctx];
-  let m = s.m + dir, y = s.y;
-  if (m < 0)  { m = 11; y--; }
-  if (m > 11) { m = 0;  y++; }
-  s.m = m; s.y = y;
-  dpRender(ctx);
-}
-
-function dpClickDay(ctx, ds) {
-  const s = DP[ctx];
-  if (!s.picking) {
-    s.start = ds; s.end = null; s.picking = true;
+// ─── 點擊邏輯 ────────────────────────────────────────
+// 無起日 → 設起日
+// 有起日無迄日 → 同天取消；不同天設迄日（自動排序）
+// 有起迄日 → 重設，以此天為新起日
+function dpClickDay(ctx, ds){
+  const s=DP[ctx]; s.hov=null;
+  if(!s.start){
+    s.start=ds;
+  } else if(!s.end){
+    if(ds===s.start){ s.start=null; }
+    else { s.end=ds; if(s.start>s.end)[s.start,s.end]=[s.end,s.start]; }
   } else {
-    if (ds === s.start) {
-      s.end = null; s.picking = false;
-    } else {
-      s.end = ds; s.picking = false;
-      if (s.start > s.end) [s.start, s.end] = [s.end, s.start];
-    }
+    s.start=ds; s.end=null;
   }
   dpUpdateTrigger(ctx); dpSyncDays(ctx); dpRender(ctx);
 }
 
-function dpHover(ctx, ds) {
-  const s = DP[ctx];
-  if (!s.picking || !s.start) return;
-  const daysEl = document.getElementById(ctx + 'DatePanel').querySelector('.dp-days');
-  if (!daysEl) return;
-  const { y, m } = s;
-  const today = todayObj();
-  const firstDay = new Date(y, m, 1).getDay();
-  const dim = new Date(y, m + 1, 0).getDate();
-  const lo = s.start <= ds ? s.start : ds;
-  const hi = s.start <= ds ? ds : s.start;
-  let cells = '';
-  for (let i = 0; i < firstDay; i++) cells += '<div class="dp-d emp"></div>';
-  for (let d = 1; d <= dim; d++) {
-    const dd = d2s(y, m, d);
-    let cls = 'dp-d';
-    if (y===today.y && m===today.m && d===today.d) cls += ' tod';
-    if (dd===lo && dd===hi)      cls += ' ds de';
-    else if (dd===lo)             cls += ' ds ir';
-    else if (dd===hi)             cls += ' ir de';
-    else if (dd>lo && dd<hi)     cls += ' ir';
-    cells += `<div class="${cls}" data-ds="${dd}">${d}</div>`;
+// ─── Hover 預覽 ───────────────────────────────────────
+function dpHov(ctx, ds){
+  const s=DP[ctx];
+  if(!s.start || s.end){ if(s.hov){s.hov=null; dpRender(ctx);} return; }
+  if(s.hov===ds) return;
+  s.hov=ds; dpRender(ctx);
+}
+
+// ─── 確定 ────────────────────────────────────────────
+function dpConfirm(ctx){ DP[ctx].hov=null; dpUpdateTrigger(ctx); dpSyncDays(ctx); dpClose(ctx); }
+function dpSet(ctx,start,end){ const s=DP[ctx]; s.start=start||null; s.end=end||null; s.hov=null; dpUpdateTrigger(ctx); }
+function dpGetStart(ctx){ return DP[ctx].start||''; }
+function dpGetEnd(ctx)  { return DP[ctx].end  ||''; }
+
+// ─── 年份格 ───────────────────────────────────────────
+function dpRenderYear(ctx, panel){
+  const s=DP[ctx]; const base=s.yrBase; const curY=todayObj().y;
+  const nav=mk('div','dp-yr-nav');
+  const bp=mkBtn('dp-arr','‹',e=>{ e.stopPropagation(); s.yrBase-=16; dpRender(ctx); });
+  const lbl=mk('span'); lbl.style.cssText='font-size:.8rem;color:var(--muted)'; lbl.textContent=base+'–'+(base+15);
+  const bn=mkBtn('dp-arr','›',e=>{ e.stopPropagation(); s.yrBase+=16; dpRender(ctx); });
+  nav.append(bp,lbl,bn);
+  const grid=mk('div','dp-yrgrid');
+  for(let y=base;y<base+16;y++){
+    const cell=mk('div','dp-yrcell'+(y===s.y?' ysel':'')+(y===curY&&y!==s.y?' ycur':''));
+    cell.textContent=y;
+    const _y=y;
+    cell.addEventListener('click',e=>{ e.stopPropagation(); s.y=_y; s.showYr=false; dpRender(ctx); });
+    grid.appendChild(cell);
   }
-  daysEl.innerHTML = cells;
+  panel.append(nav,grid);
 }
 
-function dpConfirm(ctx) {
-  DP[ctx].picking = false;
-  dpUpdateTrigger(ctx); dpSyncDays(ctx); dpClose(ctx);
-}
-
-function dpSet(ctx, start, end) {
-  const s = DP[ctx];
-  s.start = start || null; s.end = end || null; s.picking = false;
-  dpUpdateTrigger(ctx);
-}
-function dpGetStart(ctx) { return DP[ctx].start || ''; }
-function dpGetEnd(ctx)   { return DP[ctx].end   || ''; }
-
-// 點外部關閉日曆
+// ─── 點外部關閉 ──────────────────────────────────────
 document.addEventListener('click', e => {
-  ['input', 'edit'].forEach(ctx => {
-    const wrap = document.getElementById(ctx + 'DateWrap');
-    if (wrap && !wrap.contains(e.target)) dpClose(ctx);
+  ['input','edit'].forEach(ctx => {
+    const wrap=document.getElementById(ctx+'DateWrap');
+    if(wrap && !wrap.contains(e.target)) dpClose(ctx);
   });
 });
+window.addEventListener('resize',  ()=>{ ['input','edit'].forEach(dpPosition); });
+window.addEventListener('scroll',  ()=>{ ['input','edit'].forEach(dpPosition); }, true);
 
 // ══════════════════════════════════════════════════════
 // 雪花動畫
